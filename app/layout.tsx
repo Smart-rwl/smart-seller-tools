@@ -9,6 +9,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Smart Seller Tools",
   description: "Tools for Amazon and Flipkart Sellers",
+  verification: {
+    google: "mkSUi9CaHDpjMixEmkHhEbYgj2nL2eWBnSUq8B73E3M",
+  },
 };
 
 export default function RootLayout({
