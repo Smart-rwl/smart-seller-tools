@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # 1. Update npm dependencies (Next.js, React, Prisma, etc.)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    # Consolidate updates to prevent PR fatigue
+    groups:
+      nextjs-core:
+        patterns:
+          - "next"
+          - "react*"
+      tooling:
+        patterns:
+          - "eslint*"
+          - "typescript"
+          - "postcss"
+          - "tailwindcss"
+    # Ensure security fixes are always prioritized
+    open-pull-requests-limit: 10
+
+  # 2. Update GitHub Actions (for any CI/CD workflows)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # 3. Update Prisma (if you have a separate schema or specific generator)
+  # Dependabot will pick this up via npm, but you can add specific 
+  # labels to identify database-related changes.
+    labels:
+      - "dependencies"
+      - "javascript"
