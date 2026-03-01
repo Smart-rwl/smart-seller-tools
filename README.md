@@ -1,33 +1,40 @@
 # Smart Seller Tools 🚀
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/Smart-rwl/smart-seller-tools/graphs/commit-activity)
+[![Framework: Next.js](https://img.shields.io/badge/Framework-Next.js-black?logo=next.js)](https://nextjs.org/)
+[![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-000000?logo=vercel)](https://smart-seller-tools.vercel.app/)
+[![Language: TypeScript](https://img.shields.io/badge/Language-TypeScript-blue?logo=typescript)](https://www.typescriptlang.org/)
 
-A comprehensive suite of tools and resources designed to empower E-commerce sellers (Amazon, Flipkart, etc.) with automation, data extraction, and PPC optimization.
+A professional suite of web-based utilities designed for e-commerce sellers on **Amazon, Flipkart, Myntra, and Meesho**. This application provides real-time tools to automate data extraction, analyze seller metrics, and optimize marketplace operations.
 
-## 📌 Overview
+🔗 **Live Application:** [https://smart-seller-tools.vercel.app/](https://smart-seller-tools.vercel.app/)
 
-**Smart Seller Tools** is a collection of scripts and utilities built to simplify the daily operations of online sellers. From keyword research and rank tracking to automated data extraction and profit analysis, this repo aims to be a "Swiss Army Knife" for digital entrepreneurs.
+---
 
-## ✨ Key Features
+## ✨ Featured Tools
 
-- 🔍 **Keyword Research:** Tools to find high-converting search terms.
-- 📈 **Rank Tracker:** Monitor your product's organic and sponsored positions.
-- 📊 **PPC Optimizer:** Scripts to analyze advertising spend and lower ACOS.
-- 🕷️ **Data Extraction:** Automated pipelines to scrape product data and competitor pricing.
-- 💰 **Profit Calculator:** Calculate net margins after shipping, referral fees, and tax.
-- 📦 **Inventory Management:** Alerts and forecasts for stock replenishment.
+All tools are built as modular **.tsx** components located in `app/tools`, ensuring a fast, type-safe, and responsive user experience:
 
-## 🛠 Installation
+* **Amazon Seller Revealer:** Instantly extract seller details, clickable ratings, and automated CSV exports directly from your browser.
+* **E-commerce Analytics:** Visualize sales trends and performance metrics.
+* **Data Utilities:** Format and clean marketplace data for bulk uploads and inventory management.
+* **Smart Automation:** Client-side scripts that simplify repetitive seller tasks without needing back-end processing.
 
-To get started with these tools, clone the repository and install the necessary dependencies:
+## 🚀 Tech Stack
 
-```bash
-# Clone the repository
-git clone [https://github.com/Smart-rwl/smart-seller-tools.git](https://github.com/Smart-rwl/smart-seller-tools.git)
+* **Frontend:** React.js with Next.js (App Router)
+* **Language:** TypeScript (.tsx) for robust type safety
+* **Styling:** Tailwind CSS
+* **Deployment:** Vercel for high-performance edge hosting
 
-# Navigate to the directory
-cd smart-seller-tools
+## 📂 Project Structure
 
-# Install dependencies
-pip install -r requirements.txt
+```text
+smart-seller-tools/
+├── app/
+│   ├── tools/            # Individual .tsx tool components
+│   │   ├── amazon-revealer/
+│   │   ├── csv-generator/
+│   │   └── ...
+│   └── layout.tsx        # Global UI wrapper
+├── components/           # Reusable UI elements
+└── public/               # Static assets
