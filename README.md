@@ -3,38 +3,41 @@
 [![Framework: Next.js](https://img.shields.io/badge/Framework-Next.js-black?logo=next.js)](https://nextjs.org/)
 [![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-000000?logo=vercel)](https://smart-seller-tools.vercel.app/)
 [![Language: TypeScript](https://img.shields.io/badge/Language-TypeScript-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A professional suite of web-based utilities designed for e-commerce sellers on **Amazon, Flipkart, Myntra, and Meesho**. This application provides real-time tools to automate data extraction, analyze seller metrics, and optimize marketplace operations.
+**Smart Seller Tools** is a professional web-based suite built with **React & Next.js** to empower E-commerce sellers on platforms like Amazon, Flipkart, Myntra, and Meesho. By leveraging modern frontend technologies, these tools provide fast, client-side automation and data management without complex backend overhead.
 
-🔗 **Live Application:** [https://smart-seller-tools.vercel.app/](https://smart-seller-tools.vercel.app/)
+🔗 **Live App:** [https://smart-seller-tools.vercel.app/](https://smart-seller-tools.vercel.app/)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSmart-rwl%2Fsmart-seller-tools)
 
 ---
 
-## ✨ Featured Tools
+## ✨ Featured Tools (.tsx)
 
-All tools are built as modular **.tsx** components located in `app/tools`, ensuring a fast, type-safe, and responsive user experience:
+All utilities are modular components located in `app/tools/`, designed for high performance:
 
-* **Amazon Seller Revealer:** Instantly extract seller details, clickable ratings, and automated CSV exports directly from your browser.
-* **E-commerce Analytics:** Visualize sales trends and performance metrics.
-* **Data Utilities:** Format and clean marketplace data for bulk uploads and inventory management.
-* **Smart Automation:** Client-side scripts that simplify repetitive seller tasks without needing back-end processing.
+* **Amazon Seller Revealer:** Extract seller details, view clickable ratings, and export data to CSV directly from the web interface.
+* **Marketplace Data Formatter:** Clean and prepare bulk data for various e-commerce platform uploads.
+* **Inventory Insights:** Lightweight calculators for profit margins and stock requirements.
+* **Client-Side Automation:** Logic-heavy tools that run entirely in your browser for privacy and speed.
 
-## 🚀 Tech Stack
+## 🛠 Tech Stack
 
-* **Frontend:** React.js with Next.js (App Router)
-* **Language:** TypeScript (.tsx) for robust type safety
-* **Styling:** Tailwind CSS
-* **Deployment:** Vercel for high-performance edge hosting
+* **Frontend:** [Next.js](https://nextjs.org/) (App Router)
+* **Logic:** [TypeScript](https://www.typescriptlang.org/) (.tsx)
+* **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+* **Hosting:** [Vercel](https://vercel.com/)
 
-## 📂 Project Structure
+## 📂 Repository Structure
 
 ```text
 smart-seller-tools/
 ├── app/
-│   ├── tools/            # Individual .tsx tool components
+│   ├── tools/            # Modular tool components (.tsx)
 │   │   ├── amazon-revealer/
-│   │   ├── csv-generator/
 │   │   └── ...
-│   └── layout.tsx        # Global UI wrapper
-├── components/           # Reusable UI elements
-└── public/               # Static assets
+│   ├── layout.tsx        # UI Shell
+│   └── page.tsx          # Dashboard Home
+├── components/           # Shared React components
+└── public/               # Static assets & Icons
