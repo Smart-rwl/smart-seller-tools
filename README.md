@@ -1,44 +1,33 @@
-# 📸 Amazon Image Tool (High-Res Asset Suite)
+# Smart Seller Tools 🚀
 
-A comprehensive media toolkit designed for Amazon sellers, researchers, and e-commerce developers. This tool automates the extraction and organization of high-resolution product media that is typically restricted or hidden behind Amazon's dynamic UI.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/Smart-rwl/smart-seller-tools/graphs/commit-activity)
 
----
+A comprehensive suite of tools and resources designed to empower E-commerce sellers (Amazon, Flipkart, etc.) with automation, data extraction, and PPC optimization.
 
-## 🛠️ Core Tools (`/app/tools`)
+## 📌 Overview
 
-The engine of this repository is located in the `app/tools` directory, featuring modular utilities for asset management:
+**Smart Seller Tools** is a collection of scripts and utilities built to simplify the daily operations of online sellers. From keyword research and rank tracking to automated data extraction and profit analysis, this repo aims to be a "Swiss Army Knife" for digital entrepreneurs.
 
-### 1. **Hi-Res Resolver**
-- **Purpose:** Identifies the absolute highest-resolution "Original" image.
-- **How it works:** Automatically strips Amazon's dynamic resizing strings (e.g., `._AC_SS40_`) from image URLs to reveal the 2000px+ source file.
-- **Benefit:** Essential for creating high-quality marketing materials and competitive listing analysis.
+## ✨ Key Features
 
-### 2. **Variant Asset Mapper**
-- **Purpose:** Correlates images with specific product variations.
-- **How it works:** Scans the product's color and style swatches to map lifestyle and studio images to their respective parent/child ASINs.
+- 🔍 **Keyword Research:** Tools to find high-converting search terms.
+- 📈 **Rank Tracker:** Monitor your product's organic and sponsored positions.
+- 📊 **PPC Optimizer:** Scripts to analyze advertising spend and lower ACOS.
+- 🕷️ **Data Extraction:** Automated pipelines to scrape product data and competitor pricing.
+- 💰 **Profit Calculator:** Calculate net margins after shipping, referral fees, and tax.
+- 📦 **Inventory Management:** Alerts and forecasts for stock replenishment.
 
-### 3. **Batch Downloader Engine**
-- **Purpose:** Handles the queuing and parallel processing of image downloads.
-- **How it works:** Aggregates all discovered URLs from a page and executes a streamlined download process to save time.
+## 🛠 Installation
 
-### 4. **UI Bridge**
-- **Purpose:** Injects the "Download All" and "View Hi-Res" buttons directly into the Amazon interface.
-- **How it works:** A lightweight script that monitors page mutations to ensure buttons appear even when switching between different product variants.
+To get started with these tools, clone the repository and install the necessary dependencies:
 
----
+```bash
+# Clone the repository
+git clone [https://github.com/Smart-rwl/smart-seller-tools.git](https://github.com/Smart-rwl/smart-seller-tools.git)
 
-## 🚀 Key Features
+# Navigate to the directory
+cd smart-seller-tools
 
-- **One-Click Bulk Export:** Download an entire product's media gallery (Main, Lifestyle, Video frames) in seconds.
-- **Multi-Domain Support:** Fully compatible with `.in`, `.com`, `.de`, `.co.jp`, and all other global Amazon marketplaces.
-- **Clean Naming:** Automatically renames files based on the ASIN and image type for organized storage.
-- **Lightweight Architecture:** Optimized code that doesn't slow down your browser during research sessions.
-
----
-
-## 💻 Installation & Usage
-
-### As a Developer
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/Smart-rwl/amazon-image-tool.git](https://github.com/Smart-rwl/amazon-image-tool.git)
+# Install dependencies
+pip install -r requirements.txt
