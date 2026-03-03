@@ -1,30 +1,41 @@
-name: "Auto-Sync Repository Docs"
+name: "Auto-Sync Project Docs"
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - 'app/tools/**' # Trigger when a new tool or metadata is added
+      - 'app/tools/**'
+      - 'scripts/sync-readme.py'
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Allows the bot to commit to your repo
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
-          python-version: '3.x'
+          fetch-depth: 0 # Fetches full history for proper diffing
 
-      - name: Update README
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Update Script
         run: python scripts/sync-readme.py
 
-      - name: Commit changes as github-actions[bot]
+      - name: Commit and Push Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git diff-index --quiet HEAD || git commit -m "docs: auto-update tools list"
-          git push
+          git add README.md CHANGELOG.md
+          # Only commit if there are actual changes
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "docs: automated update of badges, tools table, and changelog"
+            git push
+          else
+            echo "No changes detected in documentation."
+          fi
