@@ -12,6 +12,25 @@ def get_tool_metadata(tool_path):
             return json.load(f)
     # Default fallback if you haven't added the JSON yet
     return {"description": "React-based seller tool.", "version": "1.0.0"}
+def generate_badges(tools_data):
+    total = len(tools_data)
+    stable = len([t for t in tools_data if t['status'] == 'Stable'])
+    
+    # Using Shields.io for professional-looking badges
+    badges = [
+        f"![Total Tools](https://img.shields.io/badge/Total_Tools-{total}-blue)",
+        f"![Stable](https://img.shields.io/badge/Stable-{stable}-success)",
+        f"![Status](https://img.shields.io/badge/Maintained%20by-github--actions-orange)"
+    ]
+    return " ".join(badges) + "\n\n"
+
+def update_readme():
+    # ... previous logic to read file and get tools_data ...
+    
+    # We'll add a new tag for badges: start_badge_tag = ""
+    end_badge_tag = ""
+    
+    # [Insert logic to find tags and inject generate_badges result]
 
 def generate_tools_list():
     tools = [d for d in os.listdir(TOOLS_DIR) 
