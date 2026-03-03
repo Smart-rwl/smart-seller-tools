@@ -62,32 +62,37 @@ def generate_badges(tools_data):
     return " ".join(badges) + "\n"
 
 def generate_tools_table(tools_data):
-    """Groups tools by category and creates a structured README section."""
-    # Organize tools into a dictionary by category
-    categories = {}
-    for tool in tools_data:
-        cat = tool.get("category", "Other")
-        if cat not in categories: categories[cat] = []
-        categories[cat].append(tool)
+    """Creates a single master table for all 40+ tools."""
+    # Table Header
+    final_md = "| Status | Category | Platform | Tool Name | Description | Version |\n"
+    final_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
     
-    final_md = ""
-    status_emojis = {"Stable": "✅", "Beta": "🧪", "Planned": "📅", "Deprecated": "⚠️"}
-    
-    for cat_name in sorted(categories.keys()):
-        final_md += f"### {cat_name}\n\n"
-        final_md += "| Status | Platform | Tool Name | Description | Version | Link |\n"
-        final_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    # Status Emojis for quick visual reference
+    status_emojis = {
+        "Stable": "✅", 
+        "Beta": "🧪", 
+        "Planned": "📅", 
+        "Deprecated": "⚠️"
+    }
+
+    # Sort tools: First by Category, then by Name
+    sorted_tools = sorted(tools_data, key=lambda x: (x.get('category', 'Utilities'), x['name']))
+
+    for tool in sorted_tools:
+        emoji = status_emojis.get(tool['status'], "✅")
+        category = tool.get('category', 'Utilities')
+        platform = tool.get('platform', 'General')
         
-        for tool in sorted(categories[cat_name], key=lambda x: x['name']):
-            emoji = status_emojis.get(tool['status'], "✅")
-            p_name = tool['platform']
-            # Using simple text for platform here to keep table clean
-            final_md += (f"| {emoji} | **{p_name}** | {tool['name']} | {tool['description']} | "
-                        f"`v{tool['version']}` | [Open](./app/tools/{tool['slug']}) |\n")
-        final_md += "\n"
+        # Row Construction
+        final_md += (
+            f"| {emoji} | **{category}** | {platform} | "
+            f"[{tool['name']}](./app/tools/{tool['slug']}) | "
+            f"{tool['description']} | `v{tool['version']}` |\n"
+        )
         
     return final_md
-def update_changelog(tool_name, new_version):
+    
+    def update_changelog(tool_name, new_version):
     """Writes version bumps to CHANGELOG.md."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     entry = f"## [{new_version}] - {date_str}\n* **{tool_name}**: Auto-detected version bump to {new_version}\n\n"
