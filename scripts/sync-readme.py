@@ -23,10 +23,7 @@ def get_last_modified(file_path):
         return datetime.now().strftime("%Y-%m-%d")
 
 def extract_metadata(tool_path):
-    """Extracts metadata object from page.tsx using Regex."""
     tsx_path = os.path.join(tool_path, "page.tsx")
-    
-    # Default values in case keys are missing in the .tsx file
     data = {
         "description": "React-based seller tool.",
         "version": "1.0.0",
@@ -38,8 +35,7 @@ def extract_metadata(tool_path):
     if os.path.exists(tsx_path):
         with open(tsx_path, "r") as f:
             content = f.read()
-            
-            # Regex patterns to find values inside 'export const metadata = { ... }'
+            # Updated patterns to look for 'toolConfig'
             patterns = {
                 "description": r'description:\s*["\'](.*?)["\']',
                 "version": r'version:\s*["\'](.*?)["\']',
@@ -47,17 +43,13 @@ def extract_metadata(tool_path):
                 "platform": r'platform:\s*["\'](.*?)["\']',
                 "category": r'category:\s*["\'](.*?)["\']'
             }
-            
             for key, pattern in patterns.items():
                 match = re.search(pattern, content)
                 if match:
                     data[key] = match.group(1)
-        
-        # Automatically pull the last updated date for this specific tool
-        data["last_mod"] = get_last_modified(tsx_path)
             
     return data
-
+    
 def generate_badges(tools_data):
     """Generates dynamic project-wide badges for the top of the README."""
     total = len(tools_data)
