@@ -1,3 +1,45 @@
+
+
+| Tool Name | Description | Version | Link |
+| :--- | :--- | :--- | :--- |
+| **Ab Test** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ab-test) |
+| **Amazon Bulk Image Dwn Tool** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/amazon-bulk-image-dwn-tool) |
+| **Amazon Fee Calculator** | Calculates referral fees, closing fees, and weight handling charges for Amazon India sellers. | `v1.1.0` | [Open Tool](./app/tools/amazon-fee-calculator) |
+| **Amazon Image Tool** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/amazon-image-tool) |
+| **Barcode Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/barcode-generator) |
+| **Bullet Builder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-builder) |
+| **Bullet Unicode** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-unicode) |
+| **Bundle Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bundle-calculator) |
+| **Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/calculator) |
+| **Cashflow Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cashflow-planner) |
+| **Cbm Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cbm-calculator) |
+| **Competitor War Room** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/competitor-war-room) |
+| **Deal Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/deal-planner) |
+| **Html Formatter** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/html-formatter) |
+| **Influencer Roi** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/influencer-roi) |
+| **Inventory Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/inventory-planner) |
+| **Keyword Density** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-density) |
+| **Keyword Mixer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-mixer) |
+| **Keywords** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keywords) |
+| **Landed Cost** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/landed-cost) |
+| **Launch Simulator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/launch-simulator) |
+| **Lqs Checker** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/lqs-checker) |
+| **Ltsf Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltsf-calculator) |
+| **Ltv Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltv-calculator) |
+| **Odr Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/odr-calculator) |
+| **Ppc Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ppc-calculator) |
+| **Price Finder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-finder) |
+| **Price Matcher** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-matcher) |
+| **Qr Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/qr-generator) |
+| **Reimbursement Estimator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/reimbursement-estimator) |
+| **Returns Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/returns-calculator) |
+| **Review Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/review-planner) |
+| **Sku Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/sku-generator) |
+| **Storage Fee Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/storage-fee-planner) |
+| **Super Url** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/super-url) |
+| **Title Optimizer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/title-optimizer) |
+| **Volume Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/volume-calculator) |
+
 # Smart Seller Tools 🚀
 
 [![Framework: Next.js](https://img.shields.io/badge/Framework-Next.js-black?logo=next.js)](https://nextjs.org/)
