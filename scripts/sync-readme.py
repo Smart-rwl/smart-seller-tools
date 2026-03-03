@@ -14,24 +14,32 @@ def get_tool_metadata(tool_path):
     return {"description": "React-based seller tool.", "version": "1.0.0"}
 
 def generate_tools_list():
-    # Only list directories, ignoring hidden ones or special Next.js files like [slug]
     tools = [d for d in os.listdir(TOOLS_DIR) 
              if os.path.isdir(os.path.join(TOOLS_DIR, d)) and not d.startswith("[")]
     
-    table_md = "| Tool Name | Description | Version | Link |\n"
-    table_md += "| :--- | :--- | :--- | :--- |\n"
+    table_md = "| Status | Tool Name | Description | Version | Link |\n"
+    table_md += "| :--- | :--- | :--- | :--- | :--- |\n"
+    
+    # Emoji map based on status
+    status_emojis = {
+        "Stable": "✅",
+        "Beta": "🧪",
+        "Planned": "📅",
+        "Deprecated": "⚠️"
+    }
     
     for tool in sorted(tools):
         meta = get_tool_metadata(os.path.join(TOOLS_DIR, tool))
-        # Formats 'amazon-fee-calculator' to 'Amazon Fee Calculator'
         display_name = tool.replace("-", " ").title()
-        desc = meta.get("description")
-        ver = meta.get("version")
+        desc = meta.get("description", "No description")
+        ver = meta.get("version", "1.0.0")
+        status = meta.get("status", "Stable")
         
-        table_md += f"| **{display_name}** | {desc} | `v{ver}` | [Open Tool](./app/tools/{tool}) |\n"
+        emoji = status_emojis.get(status, "✅")
+        
+        table_md += f"| {emoji} {status} | **{display_name}** | {desc} | `v{ver}` | [Open](./app/tools/{tool}) |\n"
     
     return table_md
-
 def update_readme():
     if not os.path.exists(README_PATH):
         print("README.md not found!")
