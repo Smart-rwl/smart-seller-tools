@@ -1,5 +1,7 @@
 import os
+import re
 import json
+import subprocess
 from datetime import datetime
 
 # Configuration
@@ -7,121 +9,135 @@ TOOLS_DIR = "app/tools"
 README_PATH = "README.md"
 CHANGELOG_PATH = "CHANGELOG.md"
 
-def get_tool_metadata(tool_path):
-    """Reads metadata.json from a tool folder or returns defaults."""
-    meta_file = os.path.join(tool_path, "metadata.json")
-    if os.path.exists(meta_file):
-        with open(meta_file, "r") as f:
-            return json.load(f)
-    return {
+def get_last_modified(file_path):
+    """Gets the last commit date for a specific file using Git."""
+    try:
+        result = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cd", "--date=short", file_path],
+            stderr=subprocess.STDOUT
+        ).decode("utf-8").strip()
+        return result if result else datetime.now().strftime("%Y-%m-%d")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d")
+
+def extract_metadata(tool_path):
+    """Extracts metadata object from page.tsx using Regex."""
+    tsx_path = os.path.join(tool_path, "page.tsx")
+    data = {
         "description": "React-based seller tool.",
         "version": "1.0.0",
-        "status": "Stable"
+        "status": "Stable",
+        "platform": "General"
     }
+    
+    if os.path.exists(tsx_path):
+        with open(tsx_path, "r") as f:
+            content = f.read()
+            patterns = {
+                "description": r'description:\s*["\'](.*?)["\']',
+                "version": r'version:\s*["\'](.*?)["\']',
+                "status": r'status:\s*["\'](.*?)["\']',
+                "platform": r'platform:\s*["\'](.*?)["\']'
+            }
+            for key, pattern in patterns.items():
+                match = re.search(pattern, content)
+                if match:
+                    data[key] = match.group(1)
+        
+        data["last_mod"] = get_last_modified(tsx_path)
+            
+    return data
 
 def generate_badges(tools_data):
-    """Generates Shields.io badges based on current tool stats."""
+    """Generates dynamic project-wide badges."""
     total = len(tools_data)
     stable = len([t for t in tools_data if t.get('status') == 'Stable'])
+    date_now = datetime.now().strftime('%Y--%m--%d')
     
     badges = [
         f"![Total Tools](https://img.shields.io/badge/Total_Tools-{total}-blue)",
         f"![Stable](https://img.shields.io/badge/Stable_Tools-{stable}-success)",
-        f"![Maintained](https://img.shields.io/badge/Maintained%20by-github--actions-orange)"
+        f"![Last Sync](https://img.shields.io/badge/Last_Sync-{date_now}-orange)"
     ]
     return " ".join(badges) + "\n"
 
 def generate_tools_table(tools_data):
-    """Creates a Markdown table for the README."""
-    table_md = "| Status | Tool Name | Description | Version | Link |\n"
-    table_md += "| :--- | :--- | :--- | :--- | :--- |\n"
+    """Builds the final Markdown table with platform badges and emojis."""
+    table_md = "| Status | Platform | Tool Name | Description | Version | Updated | Link |\n"
+    table_md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
     
-    status_emojis = {
-        "Stable": "✅",
-        "Beta": "🧪",
-        "Planned": "📅",
-        "Deprecated": "⚠️"
+    status_emojis = {"Stable": "✅", "Beta": "🧪", "Planned": "📅", "Deprecated": "⚠️"}
+    platform_colors = {
+        "Amazon": "FF9900", "Flipkart": "2874F0", 
+        "Meesho": "F43397", "Myntra": "FF3F6C", "General": "607D8B"
     }
     
     for tool in sorted(tools_data, key=lambda x: x['name']):
         emoji = status_emojis.get(tool['status'], "✅")
-        table_md += (
-            f"| {emoji} {tool['status']} | "
-            f"**{tool['name']}** | "
-            f"{tool['description']} | "
-            f"`v{tool['version']}` | "
-            f"[Open](./app/tools/{tool['slug']}) |\n"
-        )
+        p_name = tool['platform']
+        p_color = platform_colors.get(p_name, "607D8B")
+        p_badge = f"![{p_name}](https://img.shields.io/badge/-{p_name}-{p_color}?style=flat-square)"
+        
+        table_md += (f"| {emoji} {tool['status']} | {p_badge} | **{tool['name']}** | {tool['description']} | "
+                    f"`v{tool['version']}` | {tool['last_mod']} | [Open](./app/tools/{tool['slug']}) |\n")
     return table_md
 
 def update_changelog(tool_name, new_version):
-    """Appends a new entry to CHANGELOG.md if a version bump is detected."""
+    """Writes version bumps to CHANGELOG.md."""
     date_str = datetime.now().strftime("%Y-%m-%d")
-    entry = f"## [{new_version}] - {date_str}\n* **{tool_name}**: updated to version {new_version}\n\n"
+    entry = f"## [{new_version}] - {date_str}\n* **{tool_name}**: Auto-detected version bump to {new_version}\n\n"
     
-    existing_content = ""
+    existing = ""
     if os.path.exists(CHANGELOG_PATH):
         with open(CHANGELOG_PATH, "r") as f:
-            existing_content = f.read()
-    
-    if entry not in existing_content:
+            existing = f.read()
+            
+    if entry not in existing:
         with open(CHANGELOG_PATH, "w") as f:
-            f.write(entry + existing_content)
+            f.write(entry + existing)
 
 def update_docs():
-    """Main function to update README and Changelog."""
+    """Execution logic to update files."""
     if not os.path.exists(README_PATH):
-        print("README.md not found!")
         return
 
-    # 1. Collect all tools from app/tools/
     all_tools = []
     if not os.path.exists(TOOLS_DIR):
-        print(f"Directory {TOOLS_DIR} not found!")
         return
 
     folders = [d for d in os.listdir(TOOLS_DIR) 
                if os.path.isdir(os.path.join(TOOLS_DIR, d)) and not d.startswith("[")]
     
     for folder in folders:
-        meta = get_tool_metadata(os.path.join(TOOLS_DIR, folder))
+        meta = extract_metadata(os.path.join(TOOLS_DIR, folder))
         all_tools.append({
             "slug": folder,
             "name": folder.replace("-", " ").title(),
-            "description": meta.get("description", "No description"),
-            "version": meta.get("version", "1.0.0"),
-            "status": meta.get("status", "Stable")
+            **meta
         })
 
-    # 2. Read existing README for version comparison
     with open(README_PATH, "r") as f:
         old_content = f.read()
 
-    # 3. Check for version bumps
+    # Changelog logic: if version code is new, log it
     for tool in all_tools:
-        version_marker = f"`v{tool['version']}`"
-        if version_marker not in old_content:
+        if f"`v{tool['version']}`" not in old_content:
             update_changelog(tool['name'], tool['version'])
 
-    # 4. Inject Content into Placeholders
+    # Final string assembly
     new_content = old_content
-
-    # Inject Badges
     if "" in new_content:
         start = new_content.find("") + len("")
         end = new_content.find("")
         new_content = new_content[:start] + "\n" + generate_badges(all_tools) + new_content[end:]
 
-    # Inject Table
     if "" in new_content:
         start = new_content.find("") + len("")
         end = new_content.find("")
         new_content = new_content[:start] + "\n\n" + generate_tools_table(all_tools) + "\n" + new_content[end:]
         
-    # 5. Save final README
     with open(README_PATH, "w") as f:
         f.write(new_content)
-    print("Documentation sync complete.")
 
 if __name__ == "__main__":
     update_docs()
