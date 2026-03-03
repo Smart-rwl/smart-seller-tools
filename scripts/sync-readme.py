@@ -1,7 +1,7 @@
 import os
 import json
 
-# Updated to match your specific structure
+# Configuration
 TOOLS_DIR = "app/tools"
 README_PATH = "README.md"
 
@@ -10,36 +10,24 @@ def get_tool_metadata(tool_path):
     if os.path.exists(meta_file):
         with open(meta_file, "r") as f:
             return json.load(f)
-    # Default fallback if you haven't added the JSON yet
-    return {"description": "React-based seller tool.", "version": "1.0.0"}
+    return {"description": "React-based seller tool.", "version": "1.0.0", "status": "Stable"}
+
 def generate_badges(tools_data):
     total = len(tools_data)
-    stable = len([t for t in tools_data if t['status'] == 'Stable'])
+    stable = len([t for t in tools_data if t.get('status') == 'Stable'])
     
-    # Using Shields.io for professional-looking badges
+    # Shields.io badges
     badges = [
         f"![Total Tools](https://img.shields.io/badge/Total_Tools-{total}-blue)",
-        f"![Stable](https://img.shields.io/badge/Stable-{stable}-success)",
-        f"![Status](https://img.shields.io/badge/Maintained%20by-github--actions-orange)"
+        f"![Stable Tools](https://img.shields.io/badge/Stable_Tools-{stable}-success)",
+        f"![Automated](https://img.shields.io/badge/Docs-Automated-orange)"
     ]
-    return " ".join(badges) + "\n\n"
+    return " ".join(badges) + "\n"
 
-def update_readme():
-    # ... previous logic to read file and get tools_data ...
-    
-    # We'll add a new tag for badges: start_badge_tag = ""
-    end_badge_tag = ""
-    
-    # [Insert logic to find tags and inject generate_badges result]
-
-def generate_tools_list():
-    tools = [d for d in os.listdir(TOOLS_DIR) 
-             if os.path.isdir(os.path.join(TOOLS_DIR, d)) and not d.startswith("[")]
-    
+def generate_tools_table(tools_data):
     table_md = "| Status | Tool Name | Description | Version | Link |\n"
     table_md += "| :--- | :--- | :--- | :--- | :--- |\n"
     
-    # Emoji map based on status
     status_emojis = {
         "Stable": "✅",
         "Beta": "🧪",
@@ -47,43 +35,48 @@ def generate_tools_list():
         "Deprecated": "⚠️"
     }
     
-    for tool in sorted(tools):
-        meta = get_tool_metadata(os.path.join(TOOLS_DIR, tool))
-        display_name = tool.replace("-", " ").title()
-        desc = meta.get("description", "No description")
-        ver = meta.get("version", "1.0.0")
-        status = meta.get("status", "Stable")
-        
-        emoji = status_emojis.get(status, "✅")
-        
-        table_md += f"| {emoji} {status} | **{display_name}** | {desc} | `v{ver}` | [Open](./app/tools/{tool}) |\n"
+    for tool in sorted(tools_data, key=lambda x: x['name']):
+        emoji = status_emojis.get(tool['status'], "✅")
+        table_md += f"| {emoji} {tool['status']} | **{tool['name']}** | {tool['description']} | `v{tool['version']}` | [Open](./app/tools/{tool['slug']}) |\n"
     
     return table_md
+
 def update_readme():
     if not os.path.exists(README_PATH):
-        print("README.md not found!")
         return
+
+    # Collect data from all tool directories
+    all_tools = []
+    folders = [d for d in os.listdir(TOOLS_DIR) 
+               if os.path.isdir(os.path.join(TOOLS_DIR, d)) and not d.startswith("[")]
+    
+    for folder in folders:
+        meta = get_tool_metadata(os.path.join(TOOLS_DIR, folder))
+        all_tools.append({
+            "slug": folder,
+            "name": folder.replace("-", " ").title(),
+            "description": meta.get("description"),
+            "version": meta.get("version"),
+            "status": meta.get("status")
+        })
 
     with open(README_PATH, "r") as f:
         content = f.read()
 
-    start_tag = ""
-    end_tag = ""
-    
-    start_idx = content.find(start_tag)
-    end_idx = content.find(end_tag)
+    # Inject Badges
+    if "" in content:
+        start = content.find("") + len("")
+        end = content.find("")
+        content = content[:start] + "\n" + generate_badges(all_tools) + content[end:]
 
-    if start_idx != -1 and end_idx != -1:
-        # Keep the tags and put the table in between
-        new_content = (
-            content[:start_idx + len(start_tag)] + 
-            "\n\n" + generate_tools_list() + "\n" + 
-            content[end_idx:]
-        )
+    # Inject Table
+    if "" in content:
+        start = content.find("") + len("")
+        end = content.find("")
+        content = content[:start] + "\n\n" + generate_tools_table(all_tools) + "\n" + content[end:]
         
-        with open(README_PATH, "w") as f:
-            f.write(new_content)
-            print("README updated successfully!")
+    with open(README_PATH, "w") as f:
+        f.write(content)
 
 if __name__ == "__main__":
     update_readme()
