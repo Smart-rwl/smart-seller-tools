@@ -1,3 +1,47 @@
+
+
+| Status | Platform | Tool Name | Description | Version | Updated | Link |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Ab Test** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/ab-test) |
+| ✅ Stable | ![Amazon](https://img.shields.io/badge/-Amazon-FF9900?style=flat-square) | **Amazon Bulk Image Dwn Tool** | Bulk download and auto-rename product images from Amazon using ASINs or URLs. | `v1.2.0` | 2026-03-03 | [Open](./app/tools/amazon-bulk-image-dwn-tool) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Amazon Fee Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-27 | [Open](./app/tools/amazon-fee-calculator) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Amazon Image Tool** | React-based seller tool. | `v1.0.0` | 2025-12-17 | [Open](./app/tools/amazon-image-tool) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Barcode Generator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/barcode-generator) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Bullet Builder** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/bullet-builder) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Bullet Unicode** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/bullet-unicode) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Bundle Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/bundle-calculator) |
+| ✅ neutral | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/calculator) |
+| ✅ Safe | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Cashflow Planner** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/cashflow-planner) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Cbm Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/cbm-calculator) |
+| ✅ Losing | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Competitor War Room** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/competitor-war-room) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Deal Planner** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/deal-planner) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Html Formatter** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/html-formatter) |
+| ✅ neutral | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Influencer Roi** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/influencer-roi) |
+| ✅ healthy | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Inventory Planner** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/inventory-planner) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Keyword Density** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/keyword-density) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Keyword Mixer** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/keyword-mixer) |
+| ✅ good | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Keywords** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/keywords) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Landed Cost** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/landed-cost) |
+| ✅ Aggressive | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Launch Simulator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/launch-simulator) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Lqs Checker** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/lqs-checker) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Ltsf Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/ltsf-calculator) |
+| ✅ Unhealthy | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Ltv Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/ltv-calculator) |
+| ✅ safe | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Odr Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/odr-calculator) |
+| ✅ healthy | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Ppc Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/ppc-calculator) |
+| ✅ profitable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Price Finder** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/price-finder) |
+| ✅ safe | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Price Matcher** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/price-matcher) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Qr Generator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/qr-generator) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Reimbursement Estimator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/reimbursement-estimator) |
+| ✅ Healthy | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Returns Calculator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/returns-calculator) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Review Planner** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/review-planner) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Sku Generator** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/sku-generator) |
+| ✅ efficient | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Storage Fee Planner** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/storage-fee-planner) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Super Url** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/super-url) |
+| ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Title Optimizer** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/title-optimizer) |
+| ✅ safe | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Volume Calculator** | React-based seller tool. | `v1.0.0` | 2026-02-23 | [Open](./app/tools/volume-calculator) |
+
+
+![Total Tools](https://img.shields.io/badge/Total_Tools-37-blue) ![Stable](https://img.shields.io/badge/Stable_Tools-22-success) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--03--03-orange)
 # Smart Seller Tools 🚀
 
 | Tool Name | Description | Version | Link |
