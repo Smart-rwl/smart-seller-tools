@@ -23,8 +23,6 @@ def get_last_modified(file_path):
 def extract_metadata(tool_path):
     """Extracts metadata object from page.tsx using Regex."""
     tsx_path = os.path.join(tool_path, "page.tsx")
-    
-    # Default values if keys are missing
     data = {
         "description": "React-based seller tool.",
         "version": "1.0.0",
@@ -36,22 +34,18 @@ def extract_metadata(tool_path):
     if os.path.exists(tsx_path):
         with open(tsx_path, "r") as f:
             content = f.read()
-            
-            # This dictionary maps the metadata key to the search pattern
             patterns = {
                 "description": r'description:\s*["\'](.*?)["\']',
                 "version": r'version:\s*["\'](.*?)["\']',
                 "status": r'status:\s*["\'](.*?)["\']',
                 "platform": r'platform:\s*["\'](.*?)["\']',
-                "category": r'category:\s*["\'](.*?)["\']' # <--- This is the new line
+                "category": r'category:\s*["\'](.*?)["\']'
             }
-            
             for key, pattern in patterns.items():
                 match = re.search(pattern, content)
                 if match:
                     data[key] = match.group(1)
         
-        # Pull the last modified date from Git history
         data["last_mod"] = get_last_modified(tsx_path)
             
     return data
@@ -61,39 +55,40 @@ def generate_badges(tools_data):
     total = len(tools_data)
     stable = len([t for t in tools_data if t.get('status') == 'Stable'])
     date_now = datetime.now().strftime('%Y--%m--%d')
+    # Replace with your actual project name for Vercel
+    vercel_status = "![Vercel](https://therealsujitk-vercel-badge.vercel.app/?app=smart-seller-tools)"
     
     badges = [
         f"![Total Tools](https://img.shields.io/badge/Total_Tools-{total}-blue)",
-        f"![Stable](https://img.shields.io/badge/Stable_Tools-{stable}-success)",
+        vercel_status,
         f"![Last Sync](https://img.shields.io/badge/Last_Sync-{date_now}-orange)"
     ]
     return " ".join(badges) + "\n"
 
 def generate_tools_table(tools_data):
-    # Added "Live Demo" column
+    """Builds a single master table sorted by category."""
     table_md = "| Status | Category | Tool Name | Description | Version | Live Demo |\n"
     table_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
     
     status_emojis = {"Stable": "✅", "Beta": "🧪", "Planned": "📅"}
 
+    # Sort tools by Category, then by Name
     sorted_tools = sorted(tools_data, key=lambda x: (x.get('category', 'Utilities'), x['name']))
 
     for tool in sorted_tools:
         emoji = status_emojis.get(tool['status'], "✅")
-        # Replace 'smart-seller-tools' with your actual Vercel project name
+        # Replace with your actual Vercel domain
         vercel_link = f"https://smart-seller-tools.vercel.app/tools/{tool['slug']}"
-        
         deploy_badge = f"[![Deploy](https://img.shields.io/badge/Vercel-Live-black?style=flat&logo=vercel)]({vercel_link})"
         
         table_md += (
-            f"| {emoji} | {tool.get('category', 'Utilities')} | "
+            f"| {emoji} | **{tool.get('category', 'Utilities')}** | "
             f"[{tool['name']}](./app/tools/{tool['slug']}) | "
             f"{tool['description']} | `v{tool['version']}` | {deploy_badge} |\n"
         )
-        
     return table_md
-    
-    def update_changelog(tool_name, new_version):
+
+def update_changelog(tool_name, new_version):
     """Writes version bumps to CHANGELOG.md."""
     date_str = datetime.now().strftime("%Y-%m-%d")
     entry = f"## [{new_version}] - {date_str}\n* **{tool_name}**: Auto-detected version bump to {new_version}\n\n"
@@ -116,6 +111,7 @@ def update_docs():
     if not os.path.exists(TOOLS_DIR):
         return
 
+    # Scan app/tools/ for tool directories
     folders = [d for d in os.listdir(TOOLS_DIR) 
                if os.path.isdir(os.path.join(TOOLS_DIR, d)) and not d.startswith("[")]
     
@@ -130,12 +126,12 @@ def update_docs():
     with open(README_PATH, "r") as f:
         old_content = f.read()
 
-    # Changelog logic: if version code is new, log it
+    # Log changes if version is new
     for tool in all_tools:
         if f"`v{tool['version']}`" not in old_content:
             update_changelog(tool['name'], tool['version'])
 
-    # Final string assembly
+    # Inject Content
     new_content = old_content
     if "" in new_content:
         start = new_content.find("") + len("")
