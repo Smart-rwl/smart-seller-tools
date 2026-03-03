@@ -23,27 +23,35 @@ def get_last_modified(file_path):
 def extract_metadata(tool_path):
     """Extracts metadata object from page.tsx using Regex."""
     tsx_path = os.path.join(tool_path, "page.tsx")
+    
+    # Default values if keys are missing
     data = {
         "description": "React-based seller tool.",
         "version": "1.0.0",
         "status": "Stable",
-        "platform": "General"
+        "platform": "General",
+        "category": "Utilities"
     }
     
     if os.path.exists(tsx_path):
         with open(tsx_path, "r") as f:
             content = f.read()
+            
+            # This dictionary maps the metadata key to the search pattern
             patterns = {
                 "description": r'description:\s*["\'](.*?)["\']',
                 "version": r'version:\s*["\'](.*?)["\']',
                 "status": r'status:\s*["\'](.*?)["\']',
-                "platform": r'platform:\s*["\'](.*?)["\']'
+                "platform": r'platform:\s*["\'](.*?)["\']',
+                "category": r'category:\s*["\'](.*?)["\']' # <--- This is the new line
             }
+            
             for key, pattern in patterns.items():
                 match = re.search(pattern, content)
                 if match:
                     data[key] = match.group(1)
         
+        # Pull the last modified date from Git history
         data["last_mod"] = get_last_modified(tsx_path)
             
     return data
