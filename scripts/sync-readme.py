@@ -62,26 +62,31 @@ def generate_badges(tools_data):
     return " ".join(badges) + "\n"
 
 def generate_tools_table(tools_data):
-    """Builds the final Markdown table with platform badges and emojis."""
-    table_md = "| Status | Platform | Tool Name | Description | Version | Updated | Link |\n"
-    table_md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    """Groups tools by category and creates a structured README section."""
+    # Organize tools into a dictionary by category
+    categories = {}
+    for tool in tools_data:
+        cat = tool.get("category", "Other")
+        if cat not in categories: categories[cat] = []
+        categories[cat].append(tool)
     
+    final_md = ""
     status_emojis = {"Stable": "✅", "Beta": "🧪", "Planned": "📅", "Deprecated": "⚠️"}
-    platform_colors = {
-        "Amazon": "FF9900", "Flipkart": "2874F0", 
-        "Meesho": "F43397", "Myntra": "FF3F6C", "General": "607D8B"
-    }
     
-    for tool in sorted(tools_data, key=lambda x: x['name']):
-        emoji = status_emojis.get(tool['status'], "✅")
-        p_name = tool['platform']
-        p_color = platform_colors.get(p_name, "607D8B")
-        p_badge = f"![{p_name}](https://img.shields.io/badge/-{p_name}-{p_color}?style=flat-square)"
+    for cat_name in sorted(categories.keys()):
+        final_md += f"### {cat_name}\n\n"
+        final_md += "| Status | Platform | Tool Name | Description | Version | Link |\n"
+        final_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
         
-        table_md += (f"| {emoji} {tool['status']} | {p_badge} | **{tool['name']}** | {tool['description']} | "
-                    f"`v{tool['version']}` | {tool['last_mod']} | [Open](./app/tools/{tool['slug']}) |\n")
-    return table_md
-
+        for tool in sorted(categories[cat_name], key=lambda x: x['name']):
+            emoji = status_emojis.get(tool['status'], "✅")
+            p_name = tool['platform']
+            # Using simple text for platform here to keep table clean
+            final_md += (f"| {emoji} | **{p_name}** | {tool['name']} | {tool['description']} | "
+                        f"`v{tool['version']}` | [Open](./app/tools/{tool['slug']}) |\n")
+        final_md += "\n"
+        
+    return final_md
 def update_changelog(tool_name, new_version):
     """Writes version bumps to CHANGELOG.md."""
     date_str = datetime.now().strftime("%Y-%m-%d")
