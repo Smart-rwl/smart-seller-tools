@@ -1,5 +1,52 @@
 
 
+### Other
+
+| Status | Platform | Tool Name | Description | Version | Link |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| ✅ | **General** | Ab Test | React-based seller tool. | `v1.0.0` | [Open](./app/tools/ab-test) |
+| ✅ | **Amazon** | Amazon Bulk Image Dwn Tool | Bulk download and auto-rename product images from Amazon using ASINs or URLs. | `v1.2.0` | [Open](./app/tools/amazon-bulk-image-dwn-tool) |
+| ✅ | **General** | Amazon Fee Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/amazon-fee-calculator) |
+| ✅ | **General** | Amazon Image Tool | React-based seller tool. | `v1.0.0` | [Open](./app/tools/amazon-image-tool) |
+| ✅ | **General** | Barcode Generator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/barcode-generator) |
+| ✅ | **General** | Bullet Builder | React-based seller tool. | `v1.0.0` | [Open](./app/tools/bullet-builder) |
+| ✅ | **General** | Bullet Unicode | React-based seller tool. | `v1.0.0` | [Open](./app/tools/bullet-unicode) |
+| ✅ | **General** | Bundle Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/bundle-calculator) |
+| ✅ | **General** | Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/calculator) |
+| ✅ | **General** | Cashflow Planner | React-based seller tool. | `v1.0.0` | [Open](./app/tools/cashflow-planner) |
+| ✅ | **General** | Cbm Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/cbm-calculator) |
+| ✅ | **General** | Competitor War Room | React-based seller tool. | `v1.0.0` | [Open](./app/tools/competitor-war-room) |
+| ✅ | **General** | Deal Planner | React-based seller tool. | `v1.0.0` | [Open](./app/tools/deal-planner) |
+| ✅ | **General** | Html Formatter | React-based seller tool. | `v1.0.0` | [Open](./app/tools/html-formatter) |
+| ✅ | **General** | Influencer Roi | React-based seller tool. | `v1.0.0` | [Open](./app/tools/influencer-roi) |
+| ✅ | **General** | Inventory Planner | React-based seller tool. | `v1.0.0` | [Open](./app/tools/inventory-planner) |
+| ✅ | **General** | Keyword Density | React-based seller tool. | `v1.0.0` | [Open](./app/tools/keyword-density) |
+| ✅ | **General** | Keyword Mixer | React-based seller tool. | `v1.0.0` | [Open](./app/tools/keyword-mixer) |
+| ✅ | **General** | Keywords | React-based seller tool. | `v1.0.0` | [Open](./app/tools/keywords) |
+| ✅ | **General** | Landed Cost | React-based seller tool. | `v1.0.0` | [Open](./app/tools/landed-cost) |
+| ✅ | **General** | Launch Simulator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/launch-simulator) |
+| ✅ | **General** | Lqs Checker | React-based seller tool. | `v1.0.0` | [Open](./app/tools/lqs-checker) |
+| ✅ | **General** | Ltsf Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/ltsf-calculator) |
+| ✅ | **General** | Ltv Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/ltv-calculator) |
+| ✅ | **General** | Odr Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/odr-calculator) |
+| ✅ | **General** | Ppc Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/ppc-calculator) |
+| ✅ | **General** | Price Finder | React-based seller tool. | `v1.0.0` | [Open](./app/tools/price-finder) |
+| ✅ | **General** | Price Matcher | React-based seller tool. | `v1.0.0` | [Open](./app/tools/price-matcher) |
+| ✅ | **General** | Qr Generator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/qr-generator) |
+| ✅ | **General** | Reimbursement Estimator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/reimbursement-estimator) |
+| ✅ | **General** | Returns Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/returns-calculator) |
+| ✅ | **General** | Review Planner | React-based seller tool. | `v1.0.0` | [Open](./app/tools/review-planner) |
+| ✅ | **General** | Sku Generator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/sku-generator) |
+| ✅ | **General** | Storage Fee Planner | React-based seller tool. | `v1.0.0` | [Open](./app/tools/storage-fee-planner) |
+| ✅ | **General** | Super Url | React-based seller tool. | `v1.0.0` | [Open](./app/tools/super-url) |
+| ✅ | **General** | Title Optimizer | React-based seller tool. | `v1.0.0` | [Open](./app/tools/title-optimizer) |
+| ✅ | **General** | Volume Calculator | React-based seller tool. | `v1.0.0` | [Open](./app/tools/volume-calculator) |
+
+
+
+![Total Tools](https://img.shields.io/badge/Total_Tools-37-blue) ![Stable](https://img.shields.io/badge/Stable_Tools-22-success) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--03--03-orange)
+
+
 | Status | Platform | Tool Name | Description | Version | Updated | Link |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | ✅ Stable | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | **Ab Test** | React-based seller tool. | `v1.0.0` | 2026-01-21 | [Open](./app/tools/ab-test) |
