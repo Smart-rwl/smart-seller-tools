@@ -70,35 +70,28 @@ def generate_badges(tools_data):
     return " ".join(badges) + "\n"
 
 def generate_tools_table(tools_data):
-    """Creates a single master table for all 40+ tools."""
-    # Table Header
-    final_md = "| Status | Category | Platform | Tool Name | Description | Version |\n"
-    final_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    # Added "Live Demo" column
+    table_md = "| Status | Category | Tool Name | Description | Version | Live Demo |\n"
+    table_md += "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
     
-    # Status Emojis for quick visual reference
-    status_emojis = {
-        "Stable": "✅", 
-        "Beta": "🧪", 
-        "Planned": "📅", 
-        "Deprecated": "⚠️"
-    }
+    status_emojis = {"Stable": "✅", "Beta": "🧪", "Planned": "📅"}
 
-    # Sort tools: First by Category, then by Name
     sorted_tools = sorted(tools_data, key=lambda x: (x.get('category', 'Utilities'), x['name']))
 
     for tool in sorted_tools:
         emoji = status_emojis.get(tool['status'], "✅")
-        category = tool.get('category', 'Utilities')
-        platform = tool.get('platform', 'General')
+        # Replace 'smart-seller-tools' with your actual Vercel project name
+        vercel_link = f"https://smart-seller-tools.vercel.app/tools/{tool['slug']}"
         
-        # Row Construction
-        final_md += (
-            f"| {emoji} | **{category}** | {platform} | "
+        deploy_badge = f"[![Deploy](https://img.shields.io/badge/Vercel-Live-black?style=flat&logo=vercel)]({vercel_link})"
+        
+        table_md += (
+            f"| {emoji} | {tool.get('category', 'Utilities')} | "
             f"[{tool['name']}](./app/tools/{tool['slug']}) | "
-            f"{tool['description']} | `v{tool['version']}` |\n"
+            f"{tool['description']} | `v{tool['version']}` | {deploy_badge} |\n"
         )
         
-    return final_md
+    return table_md
     
     def update_changelog(tool_name, new_version):
     """Writes version bumps to CHANGELOG.md."""
