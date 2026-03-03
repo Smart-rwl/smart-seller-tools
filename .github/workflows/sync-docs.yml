@@ -1,10 +1,9 @@
 name: "Auto-Sync Repository Docs"
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
-      - 'src/**' # Trigger when you change your core code
+      - 'src/**' # Only run when you add or change a tool
 
 jobs:
   sync:
@@ -12,20 +11,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-      - name: Run Sync Script
-        run: |
-          # Example: A script that pulls version numbers into your README
-          # replace this with your actual generation command
-          echo "Last updated on $(date)" >> README.md 
+      - name: Update README
+        run: python scripts/sync-readme.py
 
       - name: Commit changes as github-actions[bot]
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
-          # Only commit if there are changes to avoid workflow errors
-          git diff-index --quiet HEAD || git commit -m "docs: auto-sync README metadata"
+          git diff-index --quiet HEAD || git commit -m "docs: auto-update tools list"
           git push
