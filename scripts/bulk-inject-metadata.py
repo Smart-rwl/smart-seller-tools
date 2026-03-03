@@ -12,42 +12,65 @@ def get_category(folder_name):
     if any(k in name for k in ["track", "status", "ship", "order"]): return "Order Management"
     return "Utilities"
 
+def get_smart_title(content, folder_name):
+    """Attempts to find the UI title used in the component."""
+    title_match = re.search(r'title="([^"]+)"', content)
+    if title_match:
+        return title_match.group(1)
+    return folder_name.replace("-", " ").title()
+
 def inject_metadata():
+    if not os.path.exists(TOOLS_DIR):
+        print("Tools directory not found.")
+        return
+
     for folder in os.listdir(TOOLS_DIR):
         folder_path = os.path.join(TOOLS_DIR, folder)
         tsx_path = os.path.join(folder_path, "page.tsx")
         
         if os.path.isdir(folder_path) and os.path.exists(tsx_path):
-            with open(tsx_path, "r") as f: content = f.read()
+            with open(tsx_path, "r") as f:
+                content = f.read()
             
-            if "export const metadata =" in content: continue
+            # CASE 1: Rename existing metadata to toolConfig to fix build error
+            if "export const metadata =" in content:
+                new_content = content.replace("export const metadata =", "export const toolConfig =", 1)
+                with open(tsx_path, "w") as f:
+                    f.write(new_content)
+                print(f"🔄 Renamed metadata to toolConfig in {folder}")
+                continue
+
+            # CASE 2: Skip if toolConfig already exists
+            if "export const toolConfig =" in content:
+                continue
             
-            title = folder.replace("-", " ").title()
+            # CASE 3: Inject fresh toolConfig
+            title = get_smart_title(content, folder)
             category = get_category(folder)
-            
             platform = "General"
             if "amazon" in folder.lower(): platform = "Amazon"
             elif "flipkart" in folder.lower(): platform = "Flipkart"
             
-            metadata_block = (
-                f"export const metadata = {{\n"
+            config_block = (
+                f"/**\n * CONFIG FOR AUTOMATION\n */\n"
+                f"export const toolConfig = {{\n"
                 f"  title: \"{title}\",\n"
                 f"  description: \"Automated tool for {title}.\",\n"
                 f"  version: \"1.0.0\",\n"
                 f"  status: \"Stable\",\n"
-                f"  category: \"{category}\",\n" # Added Category
+                f"  category: \"{category}\",\n"
                 f"  platform: \"{platform}\"\n"
                 f"}};\n\n"
             )
             
-            # Insert after 'use client'
             if "'use client'" in content:
-                new_content = content.replace("'use client';", f"'use client';\n\n{metadata_block}", 1)
+                new_content = content.replace("'use client';", f"'use client';\n\n{config_block}", 1)
             else:
-                new_content = metadata_block + content
+                new_content = config_block + content
                 
-            with open(tsx_path, "w") as f: f.write(new_content)
-            print(f"✅ Categorized {folder} as {category}")
+            with open(tsx_path, "w") as f:
+                f.write(new_content)
+            print(f"✅ Injected toolConfig into {folder}")
 
 if __name__ == "__main__":
     inject_metadata()
