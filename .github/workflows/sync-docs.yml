@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**' # Only run when you add or change a tool
+      - 'app/tools/**' # Trigger when a new tool or metadata is added
 
 jobs:
   sync:
