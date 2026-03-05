@@ -14,33 +14,33 @@ folders.forEach(folder => {
   if (fs.existsSync(pagePath)) {
     const content = fs.readFileSync(pagePath, 'utf8');
 
-    // Check if it's already split to avoid double-processing
-    if (content.includes("import ToolClient from './ToolClient'")) return;
+    // Skip if already updated to avoid breaking things
+    if (content.includes("async function Page")) return;
 
-    // 1. Extract the Metadata block for the Bot
+    // 1. Extract the Metadata block
     const metadataMatch = content.match(/\/\*\*[\s\S]*?\*\/[\s\S]*?export const metadata = {[\s\S]*?};/);
     const metadataBlock = metadataMatch ? metadataMatch[0] : "";
 
-    // 2. Prepare the Client content (The Logic)
-    // We keep everything but remove the metadata export to avoid the error
+    // 2. Prepare Client content: Clean up metadata and ensure 'use client'
     let clientContent = content.replace(/export const metadata = {[\s\S]*?};/, "");
     if (!clientContent.trim().startsWith("'use client'")) {
         clientContent = "'use client';\n" + clientContent;
     }
 
-    // 3. Prepare the new Page content (The Entry Point)
+    // 3. Prepare the New Page content with Async Params for Next.js 15
     const newPageContent = `import ToolClient from './ToolClient';
 
 ${metadataBlock}
 
-export default function Page() {
-  return <ToolClient />;
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  return <ToolClient slug={slug} />;
 }`;
 
-    // Write the files
+    // Write files
     fs.writeFileSync(clientPath, clientContent);
     fs.writeFileSync(pagePath, newPageContent);
     
-    console.log(`✅ Processed: ${folder}`);
+    console.log(`✅ Fixed Dynamic Route: ${folder}`);
   }
 });
