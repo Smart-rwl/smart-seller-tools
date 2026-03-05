@@ -13,16 +13,23 @@ folders.forEach(folder => {
   if (fs.existsSync(clientPath)) {
     let content = fs.readFileSync(clientPath, 'utf8');
 
-    // This regex looks for: export default function ToolClient()
-    // and replaces it with: export default function ToolClient({ slug }: { slug: string })
+    // Case 1: Standard function declaration
+    // Matches: export default function ToolClient()
     const updatedContent = content.replace(
       /export default function ToolClient\s*\(\s*\)/, 
       "export default function ToolClient({ slug }: { slug: string })"
     );
 
-    if (content !== updatedContent) {
-      fs.writeFileSync(clientPath, updatedContent);
-      console.log(`✅ Fixed Props for: ${folder}`);
+    // Case 2: Arrow function (if applicable)
+    // Matches: const ToolClient = () =>
+    const finalContent = updatedContent.replace(
+      /const ToolClient\s*=\s*\(\s*\)\s*=>/, 
+      "const ToolClient = ({ slug }: { slug: string }) =>"
+    );
+
+    if (content !== finalContent) {
+      fs.writeFileSync(clientPath, finalContent);
+      console.log(`✅ Prop signature fixed: ${folder}`);
     }
   }
 });
