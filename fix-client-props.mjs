@@ -29,7 +29,7 @@ folders.forEach(folder => {
 
     if (content !== updatedContent) {
       fs.writeFileSync(clientPath, updatedContent);
-      console.log(`✅ Prop signature fixed: ${folder}`);
+      console.log(`✅ Prop  signature fixed: ${folder}`);
     }
   }
 });
