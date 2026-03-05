@@ -15,20 +15,20 @@ folders.forEach(folder => {
 
     // Case 1: Standard function declaration
     // Matches: export default function ToolClient()
-    const updatedContent = content.replace(
+    let updatedContent = content.replace(
       /export default function ToolClient\s*\(\s*\)/, 
       "export default function ToolClient({ slug }: { slug: string })"
     );
 
     // Case 2: Arrow function (if applicable)
     // Matches: const ToolClient = () =>
-    const finalContent = updatedContent.replace(
+    updatedContent = updatedContent.replace(
       /const ToolClient\s*=\s*\(\s*\)\s*=>/, 
       "const ToolClient = ({ slug }: { slug: string }) =>"
     );
 
-    if (content !== finalContent) {
-      fs.writeFileSync(clientPath, finalContent);
+    if (content !== updatedContent) {
+      fs.writeFileSync(clientPath, updatedContent);
       console.log(`✅ Prop signature fixed: ${folder}`);
     }
   }
