@@ -10,24 +10,26 @@ folders.forEach(folder => {
   if (fs.existsSync(clientPath)) {
     let content = fs.readFileSync(clientPath, 'utf8');
 
-    // 1. Remove the redundant Page function that is missing the prop
+    // 1. Remove the redundant Page function block entirely
     content = content.replace(/export\s+default\s+function\s+Page[\s\S]*?{[\s\S]*?return\s+<ToolClient\s*\/>;?\s*}/g, "");
-    
-    // 2. Fix the ToolClient function signature to accept { slug }
+    content = content.replace(/export\s+default\s+async\s+function\s+Page[\s\S]*?{[\s\S]*?return\s+<ToolClient\s*\/>;?\s*}/g, "");
+
+    // 2. Ensure ToolClient is exported and accepts the slug prop
+    // Find the ToolClient function and inject the props
     let updatedContent = content.replace(
-      /export\s+default\s+function\s+ToolClient\s*\(\s*\)/, 
-      "export default function ToolClient({ slug }: { slug: string })"
+      /(export\s+default\s+function\s+ToolClient)\s*\(\s*\)/, 
+      "$1({ slug }: { slug: string })"
     );
 
-    // Also handle Arrow Functions just in case
+    // Handle arrow functions just in case
     updatedContent = updatedContent.replace(
-      /const\s+ToolClient\s*=\s*\(\s*\)\s*=>/, 
-      "const ToolClient = ({ slug }: { slug: string }) =>"
+      /(const\s+ToolClient\s*=\s*)\(\s*\)\s*=>/, 
+      "$1({ slug }: { slug: string }) =>"
     );
 
     if (content !== updatedContent) {
       fs.writeFileSync(clientPath, updatedContent);
-      console.log(`✅ Aligned: ${folder}`);
+      console.log(`✅ Cleaned up: ${folder}`);
     }
   }
 });
