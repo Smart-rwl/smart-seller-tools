@@ -15,7 +15,6 @@ folders.forEach(folder => {
     content = content.replace(/export\s+default\s+async\s+function\s+Page[\s\S]*?{[\s\S]*?return\s+<ToolClient\s*\/>;?\s*}/g, "");
 
     // 2. Ensure ToolClient is exported and accepts the slug prop
-    // Find the ToolClient function and inject the props
     let updatedContent = content.replace(
       /(export\s+default\s+function\s+ToolClient)\s*\(\s*\)/, 
       "$1({ slug }: { slug: string })"
