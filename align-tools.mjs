@@ -10,19 +10,16 @@ folders.forEach(folder => {
   if (fs.existsSync(clientPath)) {
     let content = fs.readFileSync(clientPath, 'utf8');
 
-    // 1. Remove any accidental 'Page' function inside ToolClient.tsx
-    // This is likely what is causing the "Property 'slug' is missing" error at the Page level
-    content = content.replace(/export\s+default\s+async\s+function\s+Page[\s\S]*?{[\s\S]*?return\s+<ToolClient\s*\/>;?\s*}/g, "");
+    // 1. Remove the redundant Page function that is missing the prop
     content = content.replace(/export\s+default\s+function\s+Page[\s\S]*?{[\s\S]*?return\s+<ToolClient\s*\/>;?\s*}/g, "");
-
-    // 2. Ensure the main ToolClient function accepts the slug
-    // Standard function fix
+    
+    // 2. Fix the ToolClient function signature to accept { slug }
     let updatedContent = content.replace(
       /export\s+default\s+function\s+ToolClient\s*\(\s*\)/, 
       "export default function ToolClient({ slug }: { slug: string })"
     );
 
-    // Arrow function fix
+    // Also handle Arrow Functions just in case
     updatedContent = updatedContent.replace(
       /const\s+ToolClient\s*=\s*\(\s*\)\s*=>/, 
       "const ToolClient = ({ slug }: { slug: string }) =>"
@@ -30,7 +27,7 @@ folders.forEach(folder => {
 
     if (content !== updatedContent) {
       fs.writeFileSync(clientPath, updatedContent);
-      console.log(`✅ Aligned props for: ${folder}`);
+      console.log(`✅ Aligned: ${folder}`);
     }
   }
 });
