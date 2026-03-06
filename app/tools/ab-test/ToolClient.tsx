@@ -1,8 +1,7 @@
-'use client';
-import ToolClient from './ToolClient';
+// app/tools/ab-test/ToolClient.tsx
 
+// ... your imports
 
-
-export default function Page({ slug }: { slug: string }) {
-  return <ToolClient />;
-}
+export default function Page() { // Removed the { slug } requirement from the Page component itself
+  return <ToolClient slug="ab-test" />;
+}git add
