@@ -31,7 +31,7 @@ jobs:
           npx prisma generate
 
       - name: Auto-Commit Fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: auto-format prisma schema [bot]"
           file_pattern: 'prisma/schema.prisma'
