@@ -1,0 +1,22 @@
+name: Auto-Fix Bot
+on: [push]
+jobs:
+  fix-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm install
+      # This fixes your code and commits it automatically
+      - name: Run Auto-Fixers
+        uses: wearerequired/lint-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prettier: true
+          eslint: true
+          auto_fix: true
+          commit: true
