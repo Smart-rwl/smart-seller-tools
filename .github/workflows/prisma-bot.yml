@@ -1,0 +1,37 @@
+name: Prisma Auto-Fix Bot
+on: [push, pull_request]
+
+jobs:
+  prisma-fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allows the bot to commit fixes back to your repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }} # Checkout the actual branch, not a detached head
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Create Dummy Env
+        # Prisma needs a DATABASE_URL to validate, even if it doesn't connect.
+        run: echo "DATABASE_URL=\"postgresql://johndoe:randompassword@localhost:5432/mydb?schema=public\"" > .env
+
+      - name: Prisma Format & Validate
+        run: |
+          npx prisma format
+          npx prisma validate
+          npx prisma generate
+
+      - name: Auto-Commit Fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-format prisma schema [bot]"
+          file_pattern: 'prisma/schema.prisma'
