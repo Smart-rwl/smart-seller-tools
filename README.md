@@ -1,4 +1,8 @@
-#lit
+<!-- BADGES_START -->
+<!-- BADGES_END -->
+
+<!-- TOOLS_TABLE_START -->
+<!-- TOOLS_TABLE_END -->
 
 | Status | Category | Platform | Tool Name | Description | Version | Last Updated | Live Demo |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |

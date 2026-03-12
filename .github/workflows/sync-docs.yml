@@ -1,9 +1,8 @@
-name: "Auto-Sync Project Docs"
+name: Auto-Sync Project Docs
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'app/tools/**'
       - 'scripts/sync-readme.py'
@@ -11,30 +10,36 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
+
+    if: github.actor != 'github-actions[bot]'
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Needed to read Git history for timestamps
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Run Update Script
         run: python scripts/sync-readme.py
 
-      - name: Commit and Push
+      - name: Commit Documentation Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add README.md CHANGELOG.md
-          if ! git diff-index --quiet HEAD; then
+
+          if ! git diff --staged --quiet; then
             git commit -m "docs: auto-sync metadata, timestamps, and badges"
-            git push
+            git push origin main
           else
             echo "No documentation changes detected."
           fi

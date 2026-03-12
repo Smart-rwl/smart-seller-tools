@@ -1,30 +1,24 @@
 version: 1
+
 dosu:
-  # Enable Dosu to automatically respond to new issues
   auto_respond: true
 
-  # Context helps Dosu give better technical answers
   project_context: >
-    This is the Smart Seller Tools repository. 
-    It focuses on providing automation and productivity tools for e-commerce sellers. 
-    The goal is to help users manage listings, track data, and optimize selling workflows.
-  
-  # Labels that Dosu should ignore (it won't comment on these)
+    Smart Seller Tools repository providing automation tools 
+    for e-commerce sellers to manage listings, analyze data,
+    and improve selling workflows.
+
   ignore_labels:
     - "no-bot"
     - "wontfix"
     - "security"
 
-  # Ask Dosu to triage issues by adding labels
   issue_triage:
     enabled: true
-    # Dosu will attempt to categorize issues with these labels
     labels:
       - "bug"
       - "enhancement"
       - "question"
       - "documentation"
 
-  # Threshold for how confident Dosu must be before replying
-  # 0.5 is a good balance for helpfulness vs. accuracy
-  reply_threshold: 0.5
+  reply_threshold: 0.7

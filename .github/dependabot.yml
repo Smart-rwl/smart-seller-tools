@@ -5,30 +5,34 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+
+    open-pull-requests-limit: 10
+    rebase-strategy: auto
+
     # Consolidate updates to prevent PR fatigue
     groups:
       nextjs-core:
         patterns:
           - "next"
           - "react*"
+
       tooling:
         patterns:
           - "eslint*"
           - "typescript"
           - "postcss"
           - "tailwindcss"
-    # Ensure security fixes are always prioritized
-    open-pull-requests-limit: 10
 
-  # 2. Update GitHub Actions (for any CI/CD workflows)
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # 2. Update GitHub Actions (CI/CD workflow dependencies)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
 
-  # 3. Update Prisma (if you have a separate schema or specific generator)
-  # Dependabot will pick this up via npm, but you can add specific 
-  # labels to identify database-related changes.
     labels:
       - "dependencies"
-      - "javascript"
+      - "github-actions"

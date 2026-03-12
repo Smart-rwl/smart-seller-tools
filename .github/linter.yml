@@ -1,4 +1,4 @@
-name: "Code Quality Check"
+name: Code Quality Check
 
 on:
   push:
@@ -6,29 +6,32 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  lint:
     name: Lint Code Base
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
-      packages: read
-      statuses: write
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Lint Code Base
-        uses: super-linter/super-linter@v5
+      - name: Run Super Linter
+        uses: super-linter/super-linter@v6
         env:
-          VALIDATE_ALL_CODEBASE: false
-          DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Only check the languages you are using
+          DEFAULT_BRANCH: main
+          VALIDATE_ALL_CODEBASE: false
+
+          # Enable only the languages used in this repo
           VALIDATE_PYTHON: true
           VALIDATE_TYPESCRIPT_JSX: true
           VALIDATE_JSON: true
