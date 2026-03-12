@@ -1,88 +1,3 @@
-# Smart Seller Tools 🚀 
-
-| Tool Name | Description | Version | Link |
-| :--- | :--- | :--- | :--- |
-| **Ab Test** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ab-test) |
-| **Amazon Bulk Image Dwn Tool** | Scrapes and downloads high-resolution product images in bulk from Amazon listings via URL or ASIN. | `v1.0.5` | [Open Tool](./app/tools/amazon-bulk-image-dwn-tool) |
-| **Amazon Fee Calculator** | Calculates referral fees, closing fees, and weight handling charges for Amazon India sellers. | `v1.1.0` | [Open Tool](./app/tools/amazon-fee-calculator) |
-| **Amazon Image Tool** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/amazon-image-tool) |
-| **Barcode Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/barcode-generator) |
-| **Bullet Builder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-builder) |
-| **Bullet Unicode** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-unicode) |
-| **Bundle Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bundle-calculator) |
-| **Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/calculator) |
-| **Cashflow Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cashflow-planner) |
-| **Cbm Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cbm-calculator) |
-| **Competitor War Room** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/competitor-war-room) |
-| **Deal Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/deal-planner) |
-| **Html Formatter** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/html-formatter) |
-| **Influencer Roi** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/influencer-roi) |
-| **Inventory Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/inventory-planner) |
-| **Keyword Density** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-density) |
-| **Keyword Mixer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-mixer) |
-| **Keywords** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keywords) |
-| **Landed Cost** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/landed-cost) |
-| **Launch Simulator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/launch-simulator) |
-| **Lqs Checker** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/lqs-checker) |
-| **Ltsf Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltsf-calculator) |
-| **Ltv Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltv-calculator) |
-| **Odr Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/odr-calculator) |
-| **Ppc Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ppc-calculator) |
-| **Price Finder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-finder) |
-| **Price Matcher** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-matcher) |
-| **Qr Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/qr-generator) |
-| **Reimbursement Estimator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/reimbursement-estimator) |
-| **Returns Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/returns-calculator) |
-| **Review Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/review-planner) |
-| **Sku Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/sku-generator) |
-| **Storage Fee Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/storage-fee-planner) |
-| **Super Url** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/super-url) |
-| **Title Optimizer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/title-optimizer) |
-| **Volume Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/volume-calculator) |
-
-
-
-| Tool Name | Description | Version | Link |
-| :--- | :--- | :--- | :--- |
-| **Ab Test** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ab-test) |
-| **Amazon Bulk Image Dwn Tool** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/amazon-bulk-image-dwn-tool) |
-| **Amazon Fee Calculator** | Calculates referral fees, closing fees, and weight handling charges for Amazon India sellers. | `v1.1.0` | [Open Tool](./app/tools/amazon-fee-calculator) |
-| **Amazon Image Tool** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/amazon-image-tool) |
-| **Barcode Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/barcode-generator) |
-| **Bullet Builder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-builder) |
-| **Bullet Unicode** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bullet-unicode) |
-| **Bundle Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/bundle-calculator) |
-| **Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/calculator) |
-| **Cashflow Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cashflow-planner) |
-| **Cbm Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/cbm-calculator) |
-| **Competitor War Room** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/competitor-war-room) |
-| **Deal Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/deal-planner) |
-| **Html Formatter** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/html-formatter) |
-| **Influencer Roi** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/influencer-roi) |
-| **Inventory Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/inventory-planner) |
-| **Keyword Density** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-density) |
-| **Keyword Mixer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keyword-mixer) |
-| **Keywords** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/keywords) |
-| **Landed Cost** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/landed-cost) |
-| **Launch Simulator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/launch-simulator) |
-| **Lqs Checker** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/lqs-checker) |
-| **Ltsf Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltsf-calculator) |
-| **Ltv Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ltv-calculator) |
-| **Odr Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/odr-calculator) |
-| **Ppc Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/ppc-calculator) |
-| **Price Finder** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-finder) |
-| **Price Matcher** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/price-matcher) |
-| **Qr Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/qr-generator) |
-| **Reimbursement Estimator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/reimbursement-estimator) |
-| **Returns Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/returns-calculator) |
-| **Review Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/review-planner) |
-| **Sku Generator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/sku-generator) |
-| **Storage Fee Planner** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/storage-fee-planner) |
-| **Super Url** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/super-url) |
-| **Title Optimizer** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/title-optimizer) |
-| **Volume Calculator** | React-based seller tool. | `v1.0.0` | [Open Tool](./app/tools/volume-calculator) |
-
-# Smart Seller Tools 🚀
 
 [![Framework: Next.js](https://img.shields.io/badge/Framework-Next.js-black?logo=next.js)](https://nextjs.org/)
 [![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-000000?logo=vercel)](https://smart-seller-tools.vercel.app/)
@@ -97,15 +12,6 @@
 
 ---
 
-## ✨ Featured Tools (.tsx)
-
-All utilities are modular components located in `app/tools/`, designed for high performance:
-
-* **Amazon Seller Revealer:** Extract seller details, view clickable ratings, and export data to CSV directly from the web interface.
-* **Marketplace Data Formatter:** Clean and prepare bulk data for various e-commerce platform uploads.
-* **Inventory Insights:** Lightweight calculators for profit margins and stock requirements.
-* **Client-Side Automation:** Logic-heavy tools that run entirely in your browser for privacy and speed.
-
 ## 🛠 Tech Stack
 
 * **Frontend:** [Next.js](https://nextjs.org/) (App Router)
@@ -118,10 +24,29 @@ All utilities are modular components located in `app/tools/`, designed for high 
 ```text
 smart-seller-tools/
 ├── app/
-│   ├── tools/            # Modular tool components (.tsx)
-│   │   ├── amazon-revealer/
-│   │   └── ...
-│   ├── layout.tsx        # UI Shell
-│   └── page.tsx          # Dashboard Home
-├── components/           # Shared React components
-└── public/               # Static assets & Icons
+│   ├── tools/            # Modular tool components (.tsx)
+│   │   ├── amazon-bulk-image-dwn-tool/
+│   │   └── ...
+│   ├── layout.tsx        # UI Shell
+│   └── page.tsx          # Dashboard Home
+├── components/           # Shared React components
+└── public/               # Static assets & Icons
+
+
+## 🚀 Getting Started
+Clone the repository:
+git clone [https://github.com/Smart-rwl/smart-seller-tools.git](https://github.com/Smart-rwl/smart-seller-tools.git)
+
+Install dependencies:
+npm install
+
+Run the development server:
+npm run dev
+
+Build for production:
+npm run build
+
+Open your browser: Navigate to http://localhost:3000 to see the tools in action.
+
+# 📜 License
+Distributed under the MIT License. See LICENSE for more information.

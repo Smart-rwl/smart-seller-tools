@@ -1,6 +1,0 @@
-{
-  "description": "Scrapes and downloads high-resolution product images in bulk from Amazon listings via URL or ASIN.",
-  "version": "1.0.5",
-  "category": "Media Tools",
-  "platform": "Amazon"
-}

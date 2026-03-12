@@ -1,0 +1,29 @@
+[33m36fcfdf[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: reset: moving to origin/main
+[33m7c1a986[m[33m ([m[1;31morigin/d9156c0[m[33m)[m HEAD@{1}: pull: Fast-forward
+[33md9156c0[m HEAD@{2}: reset: moving to d9156c0
+[33m7c1a986[m[33m ([m[1;31morigin/d9156c0[m[33m)[m HEAD@{3}: commit: Fix: Manual prop alignment for Amazon Image Downloader
+[33mea42d4b[m HEAD@{4}: reset: moving to HEAD
+[33mea42d4b[m HEAD@{5}: commit: Fix: Final prop alignment for ToolClient components
+[33mfd2201f[m HEAD@{6}: commit: Fix: Remove redundant Page function and align ToolClient props
+[33ma445f97[m HEAD@{7}: commit: Fix: Remove redundant Page function and align ToolClient props
+[33m058e2ec[m HEAD@{8}: commit: Fix: Remove redundant Page function and align ToolClient props
+[33m84b5fe9[m HEAD@{9}: pull origin main --rebase (finish): returning to refs/heads/main
+[33m84b5fe9[m HEAD@{10}: pull origin main --rebase (pick): Fix: Properly align ToolClient props and remove Page overlap
+[33md8beb04[m HEAD@{11}: pull origin main --rebase (start): checkout d8beb042b982254b692b1e5a9b7e2812b0cdfe04
+[33mb9bc794[m HEAD@{12}: commit: Fix: Properly align ToolClient props and remove Page overlap
+[33m39a3e58[m HEAD@{13}: commit: Final attempt: standardizing all component signatures
+[33m6cafcb0[m HEAD@{14}: commit: Fix: Add slug prop signature to ToolClient components
+[33m43a0677[m HEAD@{15}: commit: Fix: Add slug prop to all ToolClient components
+[33m57d7d9e[m HEAD@{16}: commit: Fix: Add slug prop signature to ToolClient components
+[33m6326718[m HEAD@{17}: commit: Fix: Add slug prop signature to ToolClient components
+[33m9ddae4f[m HEAD@{18}: pull origin main --rebase (finish): returning to refs/heads/main
+[33m9ddae4f[m HEAD@{19}: pull origin main --rebase (pick): Fix: Add slug prop to ToolClient components
+[33m4b1d395[m HEAD@{20}: pull origin main --rebase (start): checkout 4b1d3956cba198d0f4c2338b8b90768f34514c77
+[33mefdb00a[m HEAD@{21}: commit: Fix: Add slug prop to ToolClient components
+[33m3b8b17f[m HEAD@{22}: pull origin main --rebase (finish): returning to refs/heads/main
+[33m3b8b17f[m HEAD@{23}: pull origin main --rebase (pick): Fix: Next.js 15 async params and metadata split
+[33mf5ad381[m HEAD@{24}: pull origin main --rebase (start): checkout f5ad38116fc22a33692e38f7ac0f93b5c37ae657
+[33m7f5e40c[m HEAD@{25}: commit: Fix: Next.js 15 async params and metadata split
+[33mccbac60[m HEAD@{26}: commit: f
+[33m94b65ab[m HEAD@{27}: commit: l
+[33m1c6dfb1[m HEAD@{28}: clone: from https://github.com/Smart-rwl/smart-seller-tools
