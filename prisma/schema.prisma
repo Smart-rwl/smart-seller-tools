@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
@@ -13,7 +13,7 @@ model Product {
   sku       String
   price     Float      @default(0)
   createdAt DateTime   @default(now())
-  updatedAt DateTime @updatedAt // Changed from @default(now())
+  updatedAt DateTime   @updatedAt // Changed from @default(now())
   category  String?    @default("General")
   costPrice Float?     @default(0)
   inventory Inventory?
