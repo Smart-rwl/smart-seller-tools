@@ -1,0 +1,290 @@
+* [33md142c40[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: define ToolClient component in ab-test
+* [33m4adb3f7[m fix: remove accidental git command from source code
+* [33mcf4d31a[m n
+* [33m0dc3417[m fix: pass slug prop to ToolClient
+* [33me102c02[m o
+* [33md5a39f5[m fix prisma
+* [33m371d9a3[m Update package.json
+* [33m26544d3[m Update package.json
+* [33mf15a4a1[m Update package.json
+* [33me72e4ce[m Create prisma-bot.yml
+* [33m070d9b7[m Update package.json
+* [33madac16a[m Create fix-bot.yml
+* [33mab569b9[m Create prisma-check.yml
+[31m|[m * [33mfab03e8[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/prisma-7.4.2[m[33m)[m Bump prisma from 6.16.2 to 7.4.2
+[31m|[m[31m/[m  
+*   [33m36fcfdf[m Merge pull request #5 from Smart-rwl/dependabot/npm_and_yarn/types/node-25.3.3
+[33m|[m[34m\[m  
+[33m|[m * [33me22703b[m Bump @types/node from 20.19.26 to 25.3.3
+* [34m|[m   [33m2b15367[m Merge pull request #8 from Smart-rwl/dependabot/npm_and_yarn/yudiel/react-qr-scanner-2.5.1
+[35m|[m[36m\[m [34m\[m  
+[35m|[m * [34m|[m [33m7ad2f76[m Bump @yudiel/react-qr-scanner from 2.4.1 to 2.5.1
+* [36m|[m [34m|[m   [33me1c5bbe[m Merge pull request #4 from Smart-rwl/dependabot/npm_and_yarn/tooling-48f6323934
+[36m|[m[1;32m\[m [36m\[m [34m\[m  
+[36m|[m [1;32m|[m[36m/[m [34m/[m  
+[36m|[m[36m/[m[1;32m|[m [34m|[m   
+[36m|[m * [34m|[m [33m42a500e[m Bump the tooling group with 3 updates
+* [1;32m|[m [34m|[m   [33m2929fb3[m Merge pull request #9 from Smart-rwl/dependabot/npm_and_yarn/postgres-3.4.8
+[1;33m|[m[1;34m\[m [1;32m\[m [34m\[m  
+[1;33m|[m * [1;32m|[m [34m|[m [33m2330e33[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/postgres-3.4.8[m[33m)[m Bump postgres from 3.4.7 to 3.4.8
+* [1;34m|[m [1;32m|[m [34m|[m   [33m75cc84a[m Merge pull request #7 from Smart-rwl/dependabot/npm_and_yarn/jspdf-4.2.0
+[34m|[m[1;36m\[m [1;34m\[m [1;32m\[m [34m\[m  
+[34m|[m [1;36m|[m[34m_[m[1;34m|[m[34m_[m[1;32m|[m[34m/[m  
+[34m|[m[34m/[m[1;36m|[m [1;34m|[m [1;32m|[m   
+[34m|[m * [1;34m|[m [1;32m|[m [33m5ff2537[m Bump jspdf from 3.0.4 to 4.2.0
+[34m|[m[34m/[m [1;34m/[m [1;32m/[m  
+* [1;34m|[m [1;32m|[m   [33ma5878b5[m Merge pull request #10 from Smart-rwl/dependabot/npm_and_yarn/prisma/client-7.4.2
+[1;32m|[m[32m\[m [1;34m\[m [1;32m\[m  
+[1;32m|[m [32m|[m[1;32m_[m[1;34m|[m[1;32m/[m  
+[1;32m|[m[1;32m/[m[32m|[m [1;34m|[m   
+[1;32m|[m * [1;34m|[m [33m8958210[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/prisma/client-7.4.2[m[33m)[m Bump @prisma/client from 6.16.2 to 7.4.2
+* [32m|[m [1;34m|[m   [33mded717c[m Merge pull request #14 from Smart-rwl/dependabot/npm_and_yarn/recharts-3.7.0
+[33m|[m[34m\[m [32m\[m [1;34m\[m  
+[33m|[m * [32m|[m [1;34m|[m [33m8249015[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/recharts-3.7.0[m[33m)[m Bump recharts from 3.5.1 to 3.7.0
+* [34m|[m [32m|[m [1;34m|[m   [33m13a956b[m Merge pull request #20 from Smart-rwl/dependabot/npm_and_yarn/drizzle-kit-0.31.9
+[35m|[m[36m\[m [34m\[m [32m\[m [1;34m\[m  
+[35m|[m * [34m|[m [32m|[m [1;34m|[m [33mbc74149[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/drizzle-kit-0.31.9[m[33m)[m Bump drizzle-kit from 0.18.1 to 0.31.9
+* [36m|[m [34m|[m [32m|[m [1;34m|[m   [33mb18a752[m Merge pull request #6 from Smart-rwl/dependabot/npm_and_yarn/jspdf-autotable-5.0.7
+[36m|[m[1;32m\[m [36m\[m [34m\[m [32m\[m [1;34m\[m  
+[36m|[m [1;32m|[m[36m/[m [34m/[m [32m/[m [1;34m/[m  
+[36m|[m[36m/[m[1;32m|[m [34m|[m [32m|[m [1;34m|[m   
+[36m|[m * [34m|[m [32m|[m [1;34m|[m [33m8cf6716[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/jspdf-autotable-5.0.7[m[33m)[m Bump jspdf-autotable from 5.0.2 to 5.0.7
+[36m|[m [1;32m|[m [34m|[m [32m|[m [1;34m|[m * [33m941f399[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/tooling-48f6323934[m[33m)[m Bump the tooling group with 3 updates
+[36m|[m [1;32m|[m[36m_[m[34m|[m[36m_[m[32m|[m[36m_[m[1;34m|[m[36m/[m  
+[36m|[m[36m/[m[1;32m|[m [34m|[m [32m|[m [1;34m|[m   
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m7c1a986[m[33m ([m[1;31morigin/d9156c0[m[33m)[m Fix: Manual prop alignment for Amazon Image Downloader
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mea42d4b[m Fix: Final prop alignment for ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mfd2201f[m Fix: Remove redundant Page function and align ToolClient props
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33ma445f97[m Fix: Remove redundant Page function and align ToolClient props
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m058e2ec[m Fix: Remove redundant Page function and align ToolClient props
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m84b5fe9[m Fix: Properly align ToolClient props and remove Page overlap
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33md8beb04[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m39a3e58[m Final attempt: standardizing all component signatures
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m6cafcb0[m Fix: Add slug prop signature to ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m43a0677[m Fix: Add slug prop to all ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m57d7d9e[m Fix: Add slug prop signature to ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m6326718[m Fix: Add slug prop signature to ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m9ddae4f[m Fix: Add slug prop to ToolClient components
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m4b1d395[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m3b8b17f[m Fix: Next.js 15 async params and metadata split
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mf5ad381[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mccbac60[m f
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m94b65ab[m l
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33m1c6dfb1[m Create split-tools.mjs
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mc8f3984[m Update README.md
+* [1;32m|[m [34m|[m [32m|[m [1;34m|[m [33mbedd2b1[m Update README.md
+[32m|[m [1;32m|[m[32m_[m[34m|[m[32m/[m [1;34m/[m  
+[32m|[m[32m/[m[1;32m|[m [34m|[m [1;34m|[m   
+[32m|[m [1;32m|[m [34m|[m [1;34m|[m * [33m987459c[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/yudiel/react-qr-scanner-2.5.1[m[33m)[m Bump @yudiel/react-qr-scanner from 2.4.1 to 2.5.1
+[32m|[m [1;32m|[m[32m_[m[34m|[m[32m_[m[1;34m|[m[32m/[m  
+[32m|[m[32m/[m[1;32m|[m [34m|[m [1;34m|[m   
+* [1;32m|[m [34m|[m [1;34m|[m   [33mb86cd85[m Merge pull request #19 from Smart-rwl/dependabot/npm_and_yarn/supabase/ssr-0.9.0
+[1;35m|[m[1;36m\[m [1;32m\[m [34m\[m [1;34m\[m  
+[1;35m|[m * [1;32m|[m [34m|[m [1;34m|[m [33me382163[m Bump @supabase/ssr from 0.8.0 to 0.9.0
+[1;35m|[m[1;35m/[m [1;32m/[m [34m/[m [1;34m/[m  
+* [1;32m|[m [34m|[m [1;34m|[m [33m9455b19[m Update bulk-inject-metadata.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mad6a616[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m1a0efcb[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m1d46b91[m Create linter.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33md26f2fd[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m86e6a30[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m719eb54[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m8de9753[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m8ba6045[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m6fb5531[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mf5a6df8[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mf7bf4cd[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m83ca29b[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m166d6c5[m Update bulk-inject-metadata.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mc6a943a[m Update bulk-inject-metadata.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m4a31ab4[m Create bulk-inject-metadata.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m954be4d[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m9e9cf71[m Update and rename metadata.json to null
+* [1;32m|[m [34m|[m [1;34m|[m [33ma6a7052[m docs: auto-sync metadata, timestamps, and badges
+* [1;32m|[m [34m|[m [1;34m|[m [33m2b066ba[m Update page.tsx
+* [1;32m|[m [34m|[m [1;34m|[m [33md9156c0[m Update sync-docs.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33ma2acb39[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33me69eecf[m Update README.md
+* [1;32m|[m [34m|[m [1;34m|[m [33md1edc27[m Update sync-docs.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33mc715668[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m63f7cb1[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mc25c7a8[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33mdbebff3[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m431e814[m docs: auto-update tools list
+* [1;32m|[m [34m|[m [1;34m|[m [33mf6bc31c[m Create metadata.json
+* [1;32m|[m [34m|[m [1;34m|[m [33mec6f3f3[m docs: auto-update tools list
+* [1;32m|[m [34m|[m [1;34m|[m [33m738e0c8[m Create metadata.json
+* [1;32m|[m [34m|[m [1;34m|[m [33m1853da0[m Update sync-docs.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33mc3db345[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m145577f[m Update sync-readme.py
+* [1;32m|[m [34m|[m [1;34m|[m [33m699e2af[m Update sync-docs.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33mc181768[m Add script to sync tools list in README
+* [1;32m|[m [34m|[m [1;34m|[m [33mbbb9420[m Create sync-docs.yml
+* [1;32m|[m [34m|[m [1;34m|[m [33mbd66e58[m Create stale.yml
+* [1;32m|[m [34m|[m [1;34m|[m   [33m17c56e7[m Merge pull request #15 from Smart-rwl/dependabot/npm_and_yarn/dotenv-17.3.1
+[31m|[m[32m\[m [1;32m\[m [34m\[m [1;34m\[m  
+[31m|[m * [1;32m|[m [34m|[m [1;34m|[m [33m631c744[m Bump dotenv from 17.2.3 to 17.3.1
+[31m|[m [34m|[m [1;32m|[m[34m/[m [1;34m/[m  
+[31m|[m [34m|[m[34m/[m[1;32m|[m [1;34m|[m   
+* [34m/[m [1;32m|[m [1;34m|[m [33med44cc7[m Add Dosu configuration for issue management
+[34m|[m[34m/[m [1;32m/[m [1;34m/[m  
+* [1;32m|[m [1;34m|[m [33me3fd534[m Update README.md
+* [1;32m|[m [1;34m|[m [33mad0dc7e[m Update README.md
+* [1;32m|[m [1;34m|[m [33mc247c6e[m Revise README for Smart Seller Tools overview
+* [1;32m|[m [1;34m|[m [33mc27525e[m Revise README for Amazon Image Tool project
+[1;34m|[m [1;32m|[m[1;34m/[m  
+[1;34m|[m[1;34m/[m[1;32m|[m   
+[1;34m|[m [1;32m|[m * [33m88a4311[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/jspdf-4.2.0[m[33m)[m Bump jspdf from 3.0.4 to 4.2.0
+[1;34m|[m [1;32m|[m[1;34m/[m  
+[1;34m|[m[1;34m/[m[1;32m|[m   
+* [1;32m|[m   [33ma29d4d7[m Merge pull request #11 from Smart-rwl/dependabot/npm_and_yarn/drizzle-orm-0.45.1
+[1;32m|[m[35m\[m [1;32m\[m  
+[1;32m|[m [35m|[m[1;32m/[m  
+[1;32m|[m[1;32m/[m[35m|[m   
+[1;32m|[m * [33mc83cad0[m Bump drizzle-orm from 0.45.0 to 0.45.1
+[1;32m|[m [35m|[m * [33m4da14ec[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/types/node-25.3.3[m[33m)[m Bump @types/node from 20.19.26 to 25.3.3
+[1;32m|[m [35m|[m[1;32m/[m  
+[1;32m|[m[1;32m/[m[35m|[m   
+* [35m|[m   [33m5565700[m Merge pull request #12 from Smart-rwl/dependabot/npm_and_yarn/supabase/supabase-js-2.98.0
+[1;31m|[m[1;32m\[m [35m\[m  
+[1;31m|[m * [35m|[m [33m35560d0[m Bump @supabase/supabase-js from 2.87.3 to 2.98.0
+[1;31m|[m [35m|[m[35m/[m  
+* [35m|[m   [33m7799e11[m Merge pull request #3 from Smart-rwl/dependabot/npm_and_yarn/nextjs-core-14f7fdd6ec
+[35m|[m[1;34m\[m [35m\[m  
+[35m|[m [1;34m|[m[35m/[m  
+[35m|[m[35m/[m[1;34m|[m   
+[35m|[m * [33m7b4b280[m Bump the nextjs-core group with 3 updates
+[35m|[m[35m/[m  
+* [33m6bfd6cb[m Create dependabot.yml
+* [33mf27a351[m added new dashboard page
+* [33m5b552e8[m add slug in blog
+* [33m9fec3d1[m added blog and services tab
+* [33m1b39467[m added Google search console
+* [33me309652[m added advanced lvl detailing
+* [33m8f008ee[m add amazon fee calculator
+* [33m3578bd9[m ux designs
+* [33m942bab1[m added why what how to
+* [33m0dee0e8[m Upper lvl ux updation
+* [33md8c1f55[m fix upload button
+* [33mf390fef[m high ux upgrade
+* [33m08ec5a7[m fix UX of bulk img dwn
+* [33m0747a79[m fix address of route.ts
+* [33mc71aba8[m fix agagin
+* [33mb685f52[m fix csv method
+* [33m4ac3777[m fix blanks instead of <tab>
+* [33m1e92e8b[m fix error api/route.js
+* [33md2cbbdc[m added bulk image dwn tool
+* [33m22025c6[m add footer in all tools
+* [33md0b2027[m dashboard fix with search
+* [33m1236060[m dashboard khichai
+* [33m52c7eb4[m dashboard new
+* [33m53453ef[m dashboard fixing
+* [33m205e899[m bullet-unicode
+* [33m0735143[m fix logo
+* [33mf167039[m reimbursement-cal
+* [33mbb66406[m added super-url
+* [33m8a5cd7c[m tools page links updated
+* [33m6f91fa0[m profile setting fix
+* [33mb83a247[m fix dashboard, remove profile and fix favorites
+* [33mbac753f[m fixed start button
+* [33m44cb316[m fix yourwebsite to website link in qrcodegen
+* [33mc7d9f40[m added unlink tools also
+* [33m65c2cc9[m fix all tools in tools folder
+* [33m4ce2b80[m profilephoto add
+* [33mc3e67f8[m sign up page fixed added name mobile no boxes
+* [33m8969a91[m added settings page in dashboard
+* [33mf14f34d[m logout button added
+* [33m70c129e[m dashboard changes
+* [33m083c84f[m dashboard modified
+* [33mfe42064[m dashboard updated
+* [33mf08244c[m superbase.ts updated
+* [33m2f16730[m Added assets and middleware.ts
+* [33mf8a8979[m user dashboard making
+* [33m1bdf92a[m update dashboard throufh z.ai
+* [33m6548ac0[m bar code gen error fix
+* [33m3f1f679[m Fix bar code gen error
+* [33m59ddf36[m bar code updater z.ai
+* [33m1ac0c1b[m fix barcode gen
+* [33m73c4bb4[m change USD to INR in war
+* [33mdfecd8b[m war room fixes
+* [33m3f9d689[m added war room
+* [33m89e63cf[m cashflow planner
+* [33m7fa3a7f[m storage fee planner - Navbar pending
+* [33m5186d90[m odr calculator
+* [33mcb22bba[m ppc calculator
+* [33m6525745[m deal planner update
+* [33m3c8ee66[m inventory planner add piechart n all
+* [33m02c8c88[m bundle calculator update
+* [33mc1a37e1[m add lqs extension deatils on page.tsx
+* [33m5229e44[m fix seed.t
+* [33m072ba43[m fixing sql data
+* [33m5737f8d[m delete sku_table
+* [33m068d2f7[m added new row
+* [33m990ecb3[m fix name word from dashboard
+* [33mabc048b[m revenue showing seperate value, updated
+* [33mad17b62[m Data refresh on every restart
+* [33mbfd6340[m password showing wrong- fix
+* [33me2e53e6[m fix login page
+* [33me469b9f[m middleware add login security added
+* [33m8505e35[m add homepage
+* [33mdfe2f43[m dashboard save
+* [33m7364391[m Remove .env from repository
+* [33m3965975[m Dashboard Adding
+* [33m65b4491[m dashboard fixes
+* [33m9047738[m dashboard adding
+* [33m26537a7[m dashboard update
+* [33mc20a6dc[m adding dashboard
+* [33m15ec991[m added tools
+* [33m5b04794[m navbar updated and broken ones cleared
+[1;34m|[m * [33m34684c8[m[33m ([m[1;31morigin/63b59f0[m[33m)[m Clarify revenue state variable comment for version A
+[1;34m|[m[1;34m/[m  
+* [33m63b59f0[m FiX Tools again with new UI UX
+* [33mc23434b[m FiX Tools again with new UI UX
+* [33mbe0eed7[m FiX Tools again with new UI UX
+* [33me15f77d[m Fix build errors and dependencies
+* [33m751bc07[m Fix build errors and dependencies
+* [33m905c399[m Fix build errors and dependencies
+* [33me764f9e[m Add manual types for react-barcode
+* [33mb700aa3[m Fix build errors and paths
+* [33mce77f41[m Update Next.js to fix vulnerability
+[1;35m|[m * [33m1b6a526[m[33m ([m[1;31morigin/vercel/dependencies-for-react-flight-tj6835[m[33m)[m Update dependencies for React Flight RCE advisory
+[1;35m|[m[1;35m/[m  
+* [33m7ec118b[m Update website name to Smart Seller Tools
+* [33m5c5508d[m Fix build errors and install icons
+* [33m4d19386[m Fix build errors and install icons
+* [33m2115e2c[m Add FBA Storage Fee Planner
+* [33m3162897[m Add Barcode Generator
+* [33m380b7f0[m Add Rotura font
+* [33mf3c4b99[m Add Rotura font
+* [33m046ce19[m Add Bundle Profit Calculator
+* [33m5509c55[m Add Price Match Calculator
+* [33m87a7735[m Add Influencer ROI Calculator
+* [33m4f761d9[m Add AB Test Calculator
+* [33m1c50fdc[m Add Keyword Mixer with Guide
+* [33m73a2f80[m Fix syntax error in SKU generator
+* [33m91affc4[m Add SKU Generator with instructions
+* [33m7c14b17[m Add SKU Generator with instructions
+* [33m245d976[m Add Volume Calculator
+* [33m7ece689[m Add Keyword Density Analyzer
+* [33m6b51b40[m Add CBM Calculator
+* [33m6738828[m Add Listing Quality Auditor
+* [33md4955a2[m Add ODR Calculator
+* [33mba1f198[m Add Bullet Point Builder
+* [33mc05e309[m Add instructions to Title Optimizer
+* [33m3b9383b[m Add Title Optimizer
+* [33m14d1fd4[m Organize nav with dropdowns
+* [33m93ea1c8[m Add QR Code Generator
+* [33m33186f5[m Add Deal Planner
+* [33m5f47f46[m Merge RTO and Profit Calculator
+* [33m637bf35[m Add PPC Calculator
+* [33m96cf94c[m Add Inventory Planner
+* [33m8377c21[m Add Volumetric Calculator
+* [33m2efff57[m Merge GST tool into Profit Calculator
+* [33m40479bd[m Add HTML formatter tool
+* [33mc086684[m Force tool update
+* [33mc2d837f[m Add profit calculator
+* [33m1ee2743[m Add profit calculator
+* [33mee59479[m Add navigation menu
+* [33mc1ffd0b[m Add keyword optimizer tool
+* [33m7ec843d[m Add Amazon Tool
+* [33m6696a5e[m Initial commit
