@@ -1,36 +1,82 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase'; // Imports the connection we made in Step 1
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   
-  // State variables to hold the user's input
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ✅ NEW: Show/Hide password
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ✅ NEW: Check if already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        router.push('/');
+      }
+    };
+    checkUser();
+  }, [router]);
+
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevents the page from refreshing
+    e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
-    // The actual Supabase Login Logic
+    if (!email || !password) {
+      setErrorMsg('Please fill all fields');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
     });
 
     if (error) {
-      setErrorMsg(error.message); // Show error if password is wrong
+      setErrorMsg(error.message);
       setLoading(false);
     } else {
-      // Success! Redirect to dashboard or home
-      router.push('/'); 
+      router.push('/');
       router.refresh();
+    }
+  };
+
+  // ✅ NEW: Google Login
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+    });
+
+    if (error) {
+      setErrorMsg(error.message);
+      setLoading(false);
+    }
+  };
+
+  // ✅ NEW: Forgot Password
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setErrorMsg('Enter your email first');
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setErrorMsg('Password reset email sent');
     }
   };
 
@@ -40,12 +86,19 @@ export default function LoginPage() {
         
         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
         
-        {/* Error Message Alert */}
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
             {errorMsg}
           </div>
         )}
+
+        {/* ✅ NEW: Google Login Button */}
+        <button
+          onClick={handleGoogleLogin}
+          className="w-full mb-4 py-2.5 border border-gray-300 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50"
+        >
+          Continue with Google
+        </button>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -53,7 +106,9 @@ export default function LoginPage() {
             <input
               type="email"
               required
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className={`w-full p-2 border rounded-lg focus:ring-2 outline-none ${
+                errorMsg ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -62,22 +117,51 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              required
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                className={`w-full p-2 border rounded-lg focus:ring-2 outline-none ${
+                  errorMsg ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                }`}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              {/* ✅ NEW: Toggle password */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-2 text-sm text-gray-500"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+
+            {/* ✅ NEW: Forgot password */}
+            <div className="text-right mt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 flex justify-center items-center"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <span className="animate-pulse">Signing in...</span>
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
         
