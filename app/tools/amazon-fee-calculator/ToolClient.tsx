@@ -401,7 +401,11 @@ export default function AmazonFeeCalculatorPage() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <RechartsTooltip formatter={(val: number) => `₹${val.toFixed(0)}`} />
+                    <RechartsTooltip
+  formatter={(val) =>
+    typeof val === 'number' ? `₹${val.toFixed(0)}` : val
+  }
+/>
                     <Legend iconType="circle" layout="horizontal" verticalAlign="bottom" wrapperStyle={{ fontSize: '10px' }} />
                   </PieChart>
                 </ResponsiveContainer>
