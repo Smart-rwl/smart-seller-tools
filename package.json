@@ -3,15 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "prisma:generate": "prisma generate",
-    "id": "debug-env",
-"postinstall": "echo DATABASE_URL=$DATABASE_URL && prisma generate",
-    "prisma:seed": "ts-node prisma/seed.ts"
-  },
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "eslint",
+  "prisma:generate": "prisma generate",
+  "postinstall": "echo DATABASE_URL=$DATABASE_URL && prisma generate",
+  "prisma:seed": "ts-node prisma/seed.ts"
+},
   "dependencies": {
     "@esbuild-kit/core-utils": "^3.3.2",
     "@esbuild-kit/esm-loader": "^2.6.5",
