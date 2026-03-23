@@ -16,9 +16,9 @@ import ToolWorkspace from '@/app/components/ToolWorkspace';
  * The github-actions[bot] reads this block to update the README and Changelog.
  */
 
-
 export default function AmazonBulkImageDownloader() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const [rawData, setRawData] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,12 +26,31 @@ export default function AmazonBulkImageDownloader() {
 
   /* ---------- CSV UPLOAD ---------- */
   const handleCSV = async (file: File) => {
+    if (!file.name.endsWith('.csv')) {
+      alert('Please upload a valid CSV file');
+      return;
+    }
+
     const text = await file.text();
+
+    if (!text.trim()) {
+      alert('CSV file is empty');
+      return;
+    }
+
     setRawData(text.replace(/,/g, '\t'));
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   /* ---------- PARSE (UX ONLY) ---------- */
   const parsed = useMemo(() => {
+    if (!rawData || rawData.trim().length === 0) {
+      return { asinCount: 0, imageCount: 0, invalid: 0 };
+    }
+
     const lines = rawData.trim().split('\n').filter(Boolean);
     let asinCount = 0;
     let imageCount = 0;
@@ -50,39 +69,69 @@ export default function AmazonBulkImageDownloader() {
 
   const isBlocked = loading || parsed.imageCount === 0;
 
-  /* ---------- DOWNLOAD (UNCHANGED BACKEND) ---------- */
+  /* ---------- DOWNLOAD ---------- */
   const handleDownload = async () => {
-    setLoading(true);
-    setProgress(30);
+    try {
+      setLoading(true);
+      setProgress(20);
 
-    const res = await fetch('/api/amazon-bulk-image-dwn-tool', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawData }),
-    });
+      controllerRef.current = new AbortController();
 
-    setProgress(70);
+      const res = await fetch('/api/amazon-bulk-image-dwn-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawData }),
+        signal: controllerRef.current.signal,
+      });
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+      setProgress(50);
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'amazon-images.zip';
-    a.click();
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Download failed');
+      }
 
-    URL.revokeObjectURL(url);
-    setProgress(100);
-    setTimeout(() => {
-      setLoading(false);
-      setProgress(0);
-    }, 800);
+      const blob = await res.blob();
+
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty file received');
+      }
+
+      setProgress(80);
+
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'amazon-images.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+
+      setProgress(100);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || 'Something went wrong while downloading');
+    } finally {
+      setTimeout(() => {
+        setLoading(false);
+        setProgress(0);
+      }, 800);
+    }
   };
 
-  /* ---------- LEFT PANEL (ACTION) ---------- */
+  /* ---------- CLEANUP ---------- */
+  useEffect(() => {
+    return () => {
+      controllerRef.current?.abort();
+    };
+  }, []);
+
+  /* ---------- LEFT PANEL ---------- */
   const leftPanel = (
     <>
-      {/* Upload */}
       <div
         onClick={() => fileInputRef.current?.click()}
         className="bg-slate-900 border border-slate-800 rounded-xl p-5 cursor-pointer hover:border-indigo-500 transition"
@@ -104,7 +153,6 @@ export default function AmazonBulkImageDownloader() {
         />
       </div>
 
-      {/* Textarea */}
       <textarea
         rows={10}
         value={rawData}
@@ -113,7 +161,6 @@ export default function AmazonBulkImageDownloader() {
         className="w-full bg-slate-900 border border-slate-800 rounded-xl p-5 text-sm font-mono text-white placeholder-slate-600 focus:border-indigo-500 outline-none"
       />
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4 text-center">
         <Stat label="ASINs" value={parsed.asinCount} />
         <Stat label="Images" value={parsed.imageCount} />
@@ -127,7 +174,6 @@ export default function AmazonBulkImageDownloader() {
         </div>
       )}
 
-      {/* Progress */}
       {loading && (
         <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
           <div
@@ -137,9 +183,8 @@ export default function AmazonBulkImageDownloader() {
         </div>
       )}
 
-      {/* CTA */}
       <button
-        disabled={isBlocked}
+        disabled={isBlocked || loading}
         onClick={handleDownload}
         className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold disabled:opacity-40"
       >
@@ -149,7 +194,7 @@ export default function AmazonBulkImageDownloader() {
     </>
   );
 
-  /* ---------- RIGHT PANEL (GUIDANCE) ---------- */
+  /* ---------- RIGHT PANEL ---------- */
   const rightPanel = (
     <>
       <InfoCard
