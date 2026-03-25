@@ -12,10 +12,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ✅ NEW: Show/Hide password
+  // ✅ Show/Hide password
   const [showPassword, setShowPassword] = useState(false);
 
-  // ✅ NEW: Check if already logged in
+  // ✅ Improved: Reactive auth check
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getSession();
@@ -23,7 +23,20 @@ export default function LoginPage() {
         router.push('/');
       }
     };
+
     checkUser();
+
+    // Listen for auth changes (important for OAuth)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        router.push('/');
+        router.refresh();
+      }
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -51,11 +64,15 @@ export default function LoginPage() {
     }
   };
 
-  // ✅ NEW: Google Login
+  // ✅ FIXED: Google Login with redirect
   const handleGoogleLogin = async () => {
     setLoading(true);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
 
     if (error) {
@@ -64,14 +81,16 @@ export default function LoginPage() {
     }
   };
 
-  // ✅ NEW: Forgot Password
+  // ✅ FIXED: Forgot Password with redirect
   const handleForgotPassword = async () => {
     if (!email) {
       setErrorMsg('Enter your email first');
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
 
     if (error) {
       setErrorMsg(error.message);
@@ -92,10 +111,11 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* ✅ NEW: Google Login Button */}
+        {/* Google Login */}
         <button
           onClick={handleGoogleLogin}
-          className="w-full mb-4 py-2.5 border border-gray-300 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50"
+          disabled={loading}
+          className="w-full mb-4 py-2.5 border border-gray-300 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 disabled:opacity-50"
         >
           Continue with Google
         </button>
@@ -130,7 +150,6 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
 
-              {/* ✅ NEW: Toggle password */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -140,7 +159,6 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* ✅ NEW: Forgot password */}
             <div className="text-right mt-1">
               <button
                 type="button"
