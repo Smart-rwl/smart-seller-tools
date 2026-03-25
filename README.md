@@ -1,5 +1,5 @@
 <!-- BADGES_START -->
-![Total Tools](https://img.shields.io/badge/Total_Tools-37-blue) ![Vercel](https://therealsujitk-vercel-badge.vercel.app/?app=smart-seller-tools) ![Stable Tools](https://img.shields.io/badge/Stable-37-brightgreen) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--03--23-orange) ![Maintained](https://img.shields.io/badge/Maintained%20by-github--actions-ff69b4)
+![Total Tools](https://img.shields.io/badge/Total_Tools-38-blue) ![Vercel](https://therealsujitk-vercel-badge.vercel.app/?app=smart-seller-tools) ![Stable Tools](https://img.shields.io/badge/Stable-38-brightgreen) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--03--25-orange) ![Maintained](https://img.shields.io/badge/Maintained%20by-github--actions-ff69b4)
 <!-- BADGES_END -->
 
 
@@ -44,6 +44,7 @@
 | ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Super Url](./app/tools/super-url) | React-based seller tool. | `v1.0.0` | 2026-03-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/super-url) |
 | ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Title Optimizer](./app/tools/title-optimizer) | React-based seller tool. | `v1.0.0` | 2026-03-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/title-optimizer) |
 | ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Volume Calculator](./app/tools/volume-calculator) | React-based seller tool. | `v1.0.0` | 2026-03-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/volume-calculator) |
+| ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Volumetric](./app/tools/volumetric) | React-based seller tool. | `v1.0.0` | 2026-03-25 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/volumetric) |
 
 <!-- TOOLS_TABLE_END -->
 
