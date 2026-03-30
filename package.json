@@ -21,7 +21,7 @@
     "@yudiel/react-qr-scanner": "^2.5.1",
     "archiver": "^7.0.1",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
