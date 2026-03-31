@@ -21,23 +21,57 @@ export async function POST(req: Request) {
     let failed = 0;
 
     for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
+      const originalUrl = urls[i];
+
+      if (!originalUrl || !originalUrl.startsWith('http')) {
+        failed++;
+        continue;
+      }
+
+      // ✅ Clean URL (remove query params like ?format=avif)
+      const cleanUrl = originalUrl.split('?')[0];
 
       try {
-        const res = await fetch(url);
+        console.log('Trying:', cleanUrl);
+
+        const res = await fetch(cleanUrl, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+            'Accept':
+              'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': new URL(cleanUrl).origin,
+            'Connection': 'keep-alive',
+          },
+        });
 
         if (!res.ok) {
+          console.log('FAILED:', res.status, cleanUrl);
           failed++;
           continue;
         }
 
         const buffer = Buffer.from(await res.arrayBuffer());
 
-        const filename = `image_${i + 1}.jpg`;
+        // ✅ Detect extension from content-type
+        let extension = '.jpg';
+        const contentType = res.headers.get('content-type') || '';
+
+        if (contentType.includes('png')) extension = '.png';
+        else if (contentType.includes('webp')) extension = '.webp';
+        else if (contentType.includes('avif')) extension = '.avif';
+        else if (contentType.includes('jpeg')) extension = '.jpg';
+
+        const filename = `image_${i + 1}${extension}`;
 
         archive.append(buffer, { name: filename });
+
+        console.log('Added:', filename);
+
         success++;
-      } catch {
+      } catch (error) {
+        console.log('EXCEPTION:', cleanUrl);
         failed++;
       }
     }
@@ -52,10 +86,11 @@ export async function POST(req: Request) {
     return new NextResponse(stream as any, {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename=\"bulk-images.zip\"',
+        'Content-Disposition': 'attachment; filename="bulk-images.zip"',
       },
     });
   } catch (err) {
+    console.error(err);
     return NextResponse.json(
       { error: 'Bulk download failed' },
       { status: 500 }
