@@ -30,7 +30,7 @@
     "lucide-react": "^1.7.0",
     "next": "^16.2.2",
     "postgres": "^3.4.9",
-    "prisma": "7.6.0",
+    "prisma": "7.7.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.4",
     "react-barcode": "^1.6.1",
