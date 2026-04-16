@@ -26,16 +26,19 @@ export default function LoginPage() {
 
     checkUser();
 
-    // Listen for auth changes (important for OAuth)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // ✅ FIXED: Proper listener destructuring
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         router.push('/');
         router.refresh();
       }
     });
 
+    // ✅ FIXED: Correct unsubscribe
     return () => {
-      listener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -68,10 +71,15 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
 
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : '';
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: redirectUrl,
       },
     });
 
@@ -88,8 +96,13 @@ export default function LoginPage() {
       return;
     }
 
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/reset-password`
+        : '';
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: redirectUrl,
     });
 
     if (error) {
