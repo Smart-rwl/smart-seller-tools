@@ -17,7 +17,7 @@
     "@heroicons/react": "^2.2.0",
     "@prisma/client": "7.7.0",
     "@supabase/ssr": "^0.10.2",
-    "@supabase/supabase-js": "^2.103.3",
+    "@supabase/supabase-js": "^2.104.0",
     "@yudiel/react-qr-scanner": "^2.5.1",
     "archiver": "^7.0.1",
     "dotenv": "^17.4.2",
