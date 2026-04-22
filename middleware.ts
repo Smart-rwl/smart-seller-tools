@@ -32,10 +32,9 @@ export async function middleware(request: NextRequest) {
 
   // ✅ Use getSession instead of getUser
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  const user = session?.user
+  data: { user },
+  error,
+} = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
 

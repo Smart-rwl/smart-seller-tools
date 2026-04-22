@@ -1,27 +1,25 @@
 {
-  "name": "amazon-image-tool",
+  "name": "smart-seller-tools",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest",
+    "test:run": "vitest run",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "postinstall": "echo DATABASE_URL=$DATABASE_URL && prisma generate",
     "prisma:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
-    "@esbuild-kit/core-utils": "^3.3.2",
-    "@esbuild-kit/esm-loader": "^2.6.5",
     "@heroicons/react": "^2.2.0",
     "@prisma/client": "7.7.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@yudiel/react-qr-scanner": "^2.5.1",
     "archiver": "^7.0.1",
-    "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.45.2",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -40,16 +38,25 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/archiver": "^7.0.0",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.10",
+    "@vitejs/plugin-react": "^6.0.1",
+    "dotenv": "^17.4.2",
     "eslint": "^10",
     "eslint-config-next": "^16.2.4",
+    "jsdom": "^29.0.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
+<<<<<<< HEAD
     "typescript": "^6.0.3"
+=======
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.5"
+>>>>>>> 8b19a47 (fix: security, deps cleanup, tests, and repo hygiene)
   }
 }
