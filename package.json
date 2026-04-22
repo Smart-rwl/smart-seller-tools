@@ -2,6 +2,9 @@
   "name": "smart-seller-tools",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
     "build": "next build",
@@ -52,11 +55,7 @@
     "jsdom": "^29.0.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
-<<<<<<< HEAD
-    "typescript": "^6.0.3"
-=======
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
->>>>>>> 8b19a47 (fix: security, deps cleanup, tests, and repo hygiene)
   }
 }
