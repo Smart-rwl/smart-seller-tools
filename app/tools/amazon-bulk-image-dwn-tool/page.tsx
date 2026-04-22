@@ -7,7 +7,7 @@ import ToolClient from './ToolClient';
 export const metadata = {
   title: "Amazon Bulk Image Downloader",
   description: "Bulk download and auto-rename product images from Amazon using ASINs or URLs.",
-  version: "1.2.0",
+  version: "2.1.0",
   status: "Stable",
   platform: "Amazon"
 };
