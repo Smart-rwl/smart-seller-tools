@@ -16,7 +16,8 @@ import {
   Maximize,
   FileType,
   Cpu,
-  Trash2
+  Trash2,
+  Code
 } from 'lucide-react';
 
 // Amazon Standard Image Variants
@@ -28,6 +29,10 @@ const IMAGE_VARIANTS = [
   { code: 'PT04', label: 'Part 4 (Use Case)' },
   { code: 'PT05', label: 'Part 5 (Dimensions)' },
   { code: 'PT06', label: 'Part 6 (Packaging)' },
+  { code: 'PT07', label: 'Part 7 (Infographic)' },
+   { code: 'PT08', label: 'Part 8 (Swatch/Color)' },
+   {code: 'PT09', label: 'Part 9 (Extra)' },
+   {code: 'PT10', label: 'Part 10 (Extra)' },
   { code: 'SWATCH', label: 'Color Swatch' },
 ];
 
