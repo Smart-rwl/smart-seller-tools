@@ -1,3 +1,6 @@
+## [2.1.2] - 2026-04-28
+* **Amazon Bulk Image Dwn Tool** version updated to 2.1.2
+
 ## [2.1.0] - 2026-04-22
 * **Amazon Bulk Image Dwn Tool** version updated to 2.1.0
 
