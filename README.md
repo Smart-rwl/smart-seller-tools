@@ -1,5 +1,5 @@
 <!-- BADGES_START -->
-![Total Tools](https://img.shields.io/badge/Total_Tools-39-blue) ![Vercel](https://therealsujitk-vercel-badge.vercel.app/?app=smart-seller-tools) ![Stable Tools](https://img.shields.io/badge/Stable-39-brightgreen) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--04--28-orange) ![Maintained](https://img.shields.io/badge/Maintained%20by-github--actions-ff69b4)
+![Total Tools](https://img.shields.io/badge/Total_Tools-39-blue) ![Vercel](https://therealsujitk-vercel-badge.vercel.app/?app=smart-seller-tools) ![Stable Tools](https://img.shields.io/badge/Stable-39-brightgreen) ![Last Sync](https://img.shields.io/badge/Last_Sync-2026--05--05-orange) ![Maintained](https://img.shields.io/badge/Maintained%20by-github--actions-ff69b4)
 <!-- BADGES_END -->
 
 
@@ -7,7 +7,7 @@
 
 | Status | Category | Platform | Tool | Description | Version | Last Updated | Live |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| ✅ | **Utilities** | ![Amazon](https://img.shields.io/badge/-Amazon-FF9900?style=flat-square) | [Ab Test](./app/tools/ab-test) | Calculate the statistical significance of your A/B tests on Amazon products. | `v1.2.0` | 2026-04-22 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/ab-test) |
+| ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Ab Test](./app/tools/ab-test) | Frequentist Z-test plus Bayesian probability for A/B tests. Multi-variant support, RPV/AOV analysis, sample size planning, and shareable results. | `v1.0.0` | 2026-05-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/ab-test) |
 | ✅ | **Utilities** | ![Amazon](https://img.shields.io/badge/-Amazon-FF9900?style=flat-square) | [Amazon Bulk Image Dwn Tool](./app/tools/amazon-bulk-image-dwn-tool) | Bulk download and auto-rename product images from Amazon using ASINs or URLs. | `v2.1.2` | 2026-04-28 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/amazon-bulk-image-dwn-tool) |
 | ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Amazon Fee Calculator](./app/tools/amazon-fee-calculator) | React-based seller tool. | `v1.0.0` | 2026-03-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/amazon-fee-calculator) |
 | ✅ | **Utilities** | ![General](https://img.shields.io/badge/-General-607D8B?style=flat-square) | [Amazon Image Tool](./app/tools/amazon-image-tool) | React-based seller tool. | `v1.0.0` | 2026-03-05 | [![Live](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://smart-seller-tools.vercel.app/tools/amazon-image-tool) |
