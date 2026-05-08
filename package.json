@@ -45,7 +45,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/archiver": "^7.0.0",
     "@types/file-saver": "^2.0.7",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
