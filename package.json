@@ -22,7 +22,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@yudiel/react-qr-scanner": "^2.5.1",
-    "archiver": "^7.0.1",
+    "archiver": "^8.0.0",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
