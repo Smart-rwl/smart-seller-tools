@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import archiver from 'archiver';
 import { PassThrough } from 'stream';
+
+const archiver = require('archiver');
 
 export const runtime = 'nodejs';
 
