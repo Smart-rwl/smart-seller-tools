@@ -15,7 +15,37 @@ import {
 } from 'lucide-react';
 
 // --- Pure calculation (no React state) — easy to read, test, and reuse ---
-function calculateMetrics(i) {
+type CalculatorInputs = {
+  sellingPrice: number;
+  productCost: number;
+  platformFees: number;
+  gstRate: number;
+  gstMode: 'inclusive' | 'exclusive';
+  shippingCost: number;
+  adsCost: number;
+  returnShipping: number;
+  packaging: number;
+  returnRate: number;
+  damageRate: number;
+};
+
+type CalculatorStatus = 'profitable' | 'breakeven' | 'loss';
+
+type CalculatorMetrics = {
+  basePrice: number;
+  taxAmt: number;
+  finalCustomerPrice: number;
+  profitOnSuccess: number;
+  lossOnReturn: number;
+  damagedValue: number;
+  weightedProfit: number;
+  margin: number;
+  roi: number;
+  breakEvenROAS: number | null;
+  status: CalculatorStatus;
+};
+
+function calculateMetrics(i: CalculatorInputs): CalculatorMetrics {
   const r = i.returnRate / 100;
 
   // 1) GST: separate the seller's taxable revenue from the price the customer pays
@@ -58,7 +88,7 @@ function calculateMetrics(i) {
   // null => no positive ad spend can make this unit profitable (fix product economics first)
 
   // 8) Status with a small deadzone so ~₹0 doesn't flicker between "loss" and "profitable"
-  let status = 'breakeven';
+  let status: CalculatorStatus = 'breakeven';
   if (weightedProfit > 0.5) status = 'profitable';
   else if (weightedProfit < -0.5) status = 'loss';
 
@@ -78,13 +108,13 @@ function calculateMetrics(i) {
 }
 
 // Clamp arbitrary user input to a finite non-negative number
-const safeNum = (v) => {
+const safeNum = (v: string | number) => {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 
 // Indian-locale number formatting (e.g. 1,00,000)
-const fmt = (n, d = 1) =>
+const fmt = (n: number, d = 1) =>
   Number.isFinite(n)
     ? n.toLocaleString('en-IN', {
         minimumFractionDigits: d,
@@ -98,7 +128,7 @@ export default function AdvancedProfitCalculator() {
   const [productCost, setProductCost] = useState(600);
   const [platformFees, setPlatformFees] = useState(300);
   const [gstRate, setGstRate] = useState(18);
-  const [gstMode, setGstMode] = useState('inclusive');
+  const [gstMode, setGstMode] = useState<'inclusive' | 'exclusive'>('inclusive');
   const [shippingCost, setShippingCost] = useState(80);
   const [adsCost, setAdsCost] = useState(200);
   const [returnShipping, setReturnShipping] = useState(120);
@@ -138,7 +168,7 @@ export default function AdvancedProfitCalculator() {
   );
 
   // Reusable number-input handler (clamps to non-negative)
-  const numHandler = (setter) => (e) => setter(safeNum(e.target.value));
+  const numHandler = (setter: (value: number) => void) => (e: React.ChangeEvent<HTMLInputElement>) => setter(safeNum(e.target.value));
 
   // Status pill styling and label
   const statusStyles = {
