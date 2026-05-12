@@ -9,7 +9,7 @@
 //
 // Type aliases at the bottom keep `ToolGroupId` and `ToolItem` working as
 // legacy names so existing imports don't break — but any code reading
-// `.group` or `.desc` on a tool needs to be updated to `.category` / `.description`.
+// `.group` or `.desc` on a tool should migrate to `.category` / `.description`.
 
 import {
   // Calculators
@@ -80,7 +80,6 @@ export interface Tool {
   description?: string;
   /** Used for filter pills and grouping */
   category: ToolCategory;
-  
   /** Lucide icon component (defaults to Zap in the UI if omitted) */
   icon?: LucideIcon;
   /** Extra terms the search bar should match */
@@ -91,32 +90,33 @@ export interface Tool {
   isPro?: boolean;
   /** Featured ranking. Lower number = surfaced higher. */
   priority?: number;
-  /** SEO metadata for these tool's page */
+  /** SEO metadata for this tool's page */
   seo?: ToolSEO;
-  // Legacy aliases (to keep old code working without type errors)
-  group?: string;
-  // Legacy alias (to keep old code working without type errors)
+
+  // ─── Legacy aliases (keep old code type-checking; prefer the fields above) ───
+  /** @deprecated Use `category` instead */
+  group?: ToolCategory;
+  /** @deprecated Use `description` instead */
   desc?: string;
-  // Legacy aliases (to keep old code working without type errors)
 }
 
 /* ────────────────────────────────────────────────
    Category labels (drives the dashboard filter pills)
 ──────────────────────────────────────────────── */
 
-export const TOOL_GROUPS: Record<ToolCategory, string> = {
+export const TOOL_GROUPS: Readonly<Record<ToolCategory, string>> = {
   calculators: 'Calculators',
   finance: 'Finance',
   listing: 'Listing',
   operations: 'Operations',
   assets: 'Assets',
-};
+} as const;
 
 /* ────────────────────────────────────────────────
    Tools
 ──────────────────────────────────────────────── */
 
-export const TOOLS: Tool[] = [
+export const TOOLS: readonly Tool[] = [
   /* ── Calculators ─────────────────────────── */
   {
     slug: 'calculator',
@@ -423,7 +423,41 @@ export const TOOLS: Tool[] = [
     isNew: true,
     keywords: ['amazon', 'image', 'download', 'bulk', 'zip', 'asin'],
   },
-];
+] as const;
+
+/* ────────────────────────────────────────────────
+   Derived helpers
+──────────────────────────────────────────────── */
+
+/** All tools that should appear as featured / prioritised. */
+export const FEATURED_TOOLS: readonly Tool[] = TOOLS
+  .filter((t): t is Tool & { priority: number } => t.priority !== undefined)
+  .sort((a, b) => a.priority - b.priority);
+
+/** Look up a single tool by its slug (returns `undefined` if not found). */
+export function getToolBySlug(slug: string): Tool | undefined {
+  return TOOLS.find((t) => t.slug === slug);
+}
+
+/** Return all tools belonging to a given category. */
+export function getToolsByCategory(category: ToolCategory): readonly Tool[] {
+  return TOOLS.filter((t) => t.category === category);
+}
+
+/**
+ * Search tools by label, description, or keywords.
+ * Case-insensitive. Returns an empty array for blank queries.
+ */
+export function searchTools(query: string): readonly Tool[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return TOOLS.filter((t) => {
+    if (t.label.toLowerCase().includes(q)) return true;
+    if (t.description?.toLowerCase().includes(q)) return true;
+    if (t.keywords?.some((k) => k.toLowerCase().includes(q))) return true;
+    return false;
+  });
+}
 
 /* ────────────────────────────────────────────────
    Legacy aliases (so old `ToolGroupId` / `ToolItem`
@@ -431,5 +465,7 @@ export const TOOLS: Tool[] = [
    and `Tool` in new code.
 ──────────────────────────────────────────────── */
 
+/** @deprecated Use `ToolCategory` */
 export type ToolGroupId = ToolCategory;
+/** @deprecated Use `Tool` */
 export type ToolItem = Tool;
