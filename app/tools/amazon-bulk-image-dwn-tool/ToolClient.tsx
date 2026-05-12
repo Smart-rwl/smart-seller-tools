@@ -12,7 +12,6 @@ import {
   Archive,
   X,
   ChevronRight,
-  Info,
   Image as ImageIcon,
   Layers,
   Clock,
@@ -44,22 +43,24 @@ export default function AmazonBulkImageDownloader() {
   const [progressLabel, setProgressLabel] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [done, setDone] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
-  /* ── CSV UPLOAD ── */
+  /* ── FILE UPLOAD ── */
   const handleCSV = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      alert('Please upload a valid CSV file');
+    const name = file.name.toLowerCase();
+    if (!/\.(csv|tsv|txt)$/.test(name)) {
+      alert('Please upload a .csv, .tsv, or .txt file');
       return;
     }
     const text = await file.text();
     if (!text.trim()) {
-      alert('CSV file is empty');
+      alert('File is empty');
       return;
     }
-    setRawData(text.replace(/,/g, '\t'));
+    // The parser & API both handle commas and whitespace; no need to mangle the text
+    setRawData(text);
     setDone(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -74,21 +75,34 @@ export default function AmazonBulkImageDownloader() {
     if (file) handleCSV(file);
   };
 
-  /* ── PARSE ── */
+  /* ── PARSE (handles both CSV and TSV) ── */
   const parsed = useMemo<ParsedResult>(() => {
     if (!rawData?.trim()) return { asinCount: 0, imageCount: 0, invalid: 0, rows: [] };
-    const lines = rawData.trim().split('\n').filter(Boolean);
+    const lines = rawData.split(/\r?\n/).filter((l) => l.trim());
     const rows: { asin: string; urls: string[] }[] = [];
-    let imageCount = 0, invalid = 0;
-    lines.forEach(line => {
-      const parts = line.trim().split(/\s+/);
+    let imageCount = 0;
+    let invalid = 0;
+    for (const line of lines) {
+      // Skip header row
+      if (/^["']?asin\b/i.test(line.trim())) continue;
+      // Split on commas OR whitespace, strip quotes
+      const parts = line.replace(/["']/g, '').split(/[,\s]+/).filter(Boolean);
+      if (parts.length === 0) continue;
       const asin = parts[0] || '';
-      const urls = parts.slice(1).filter(u => u.startsWith('http'));
+      // De-dupe and filter to http(s)
+      const seen = new Set<string>();
+      const urls: string[] = [];
+      for (const p of parts.slice(1)) {
+        if (!/^https?:\/\//i.test(p)) continue;
+        if (seen.has(p)) continue;
+        seen.add(p);
+        urls.push(p);
+      }
       imageCount += urls.length;
       if (urls.length === 0) invalid++;
       rows.push({ asin, urls });
-    });
-    return { asinCount: lines.length, imageCount, invalid, rows };
+    }
+    return { asinCount: rows.length, imageCount, invalid, rows };
   }, [rawData]);
 
   const isBlocked = loading || parsed.imageCount === 0;
@@ -104,7 +118,10 @@ export default function AmazonBulkImageDownloader() {
       controllerRef.current = new AbortController();
       const res = await fetch('/api/amazon-bulk-image-dwn-tool', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/zip, application/json',
+        },
         body: JSON.stringify({ rawData }),
         signal: controllerRef.current.signal,
       });
@@ -112,9 +129,22 @@ export default function AmazonBulkImageDownloader() {
       setProgress(45);
       setProgressLabel('Fetching images…');
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Download failed');
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+
+      // Treat any JSON response (or any non-OK) as an error and surface the real message
+      if (!res.ok || contentType.includes('application/json')) {
+        let message = `Server error (${res.status})`;
+        try {
+          const j = await res.json();
+          if (j?.error) message = j.error;
+        } catch {
+          /* response wasn't JSON — keep the generic message */
+        }
+        throw new Error(message);
+      }
+
+      if (!contentType.includes('application/zip')) {
+        throw new Error(`Unexpected response type: ${contentType || 'unknown'}`);
       }
 
       const blob = await res.blob();
@@ -122,6 +152,9 @@ export default function AmazonBulkImageDownloader() {
 
       setProgress(85);
       setProgressLabel('Building ZIP…');
+
+      const imageCount = res.headers.get('X-Image-Count');
+      const errorCount = res.headers.get('X-Error-Count');
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -133,11 +166,18 @@ export default function AmazonBulkImageDownloader() {
       URL.revokeObjectURL(url);
 
       setProgress(100);
-      setProgressLabel('Done!');
+      setProgressLabel(
+        errorCount && Number(errorCount) > 0
+          ? `Done! ${imageCount} images (${errorCount} skipped)`
+          : 'Done!'
+      );
       setDone(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      // Silently ignore user-initiated cancellation
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      const msg = error instanceof Error ? error.message : 'Something went wrong while downloading';
       console.error(error);
-      alert(error.message || 'Something went wrong while downloading');
+      alert(msg);
     } finally {
       setTimeout(() => {
         setLoading(false);
@@ -213,12 +253,12 @@ export default function AmazonBulkImageDownloader() {
           <Upload size={18} color={dragOver ? '#f97316' : '#475569'} />
         </div>
         <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 600, color: '#94a3b8', fontSize: '0.85rem', marginBottom: 4 }}>
-          {dragOver ? 'Drop your CSV here' : 'Upload or drag a CSV file'}
+          {dragOver ? 'Drop your file here' : 'Upload or drag a CSV / TSV / TXT file'}
         </p>
         <p style={{ fontFamily: "'IBM Plex Mono',monospace", color: '#334155', fontSize: '0.68rem' }}>
-          .csv — ASIN + image URLs per row
+          ASIN + image URLs per row
         </p>
-        <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={e => e.target.files && handleCSV(e.target.files[0])} />
+        <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={(e) => e.target.files && handleCSV(e.target.files[0])} />
       </div>
 
       {/* ── TEXTAREA ── */}
@@ -232,6 +272,7 @@ export default function AmazonBulkImageDownloader() {
               onClick={() => { setRawData(''); setDone(false); }}
               style={{ background: '#1e293b', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center' }}
               title="Clear"
+              aria-label="Clear input"
             >
               <X size={12} />
             </button>
@@ -243,7 +284,7 @@ export default function AmazonBulkImageDownloader() {
         <textarea
           rows={9}
           value={rawData}
-          onChange={e => { setRawData(e.target.value); setDone(false); }}
+          onChange={(e) => { setRawData(e.target.value); setDone(false); }}
           placeholder={'B08N5WRWNW https://m.media-amazon.com/images/I/img1.jpg https://m.media-amazon.com/images/I/img2.jpg\nB09X7DKTLP https://m.media-amazon.com/images/I/img3.jpg'}
           style={{
             width: '100%',
@@ -261,8 +302,8 @@ export default function AmazonBulkImageDownloader() {
             boxSizing: 'border-box',
             transition: 'border-color 0.2s',
           }}
-          onFocus={e => (e.currentTarget.style.borderColor = '#f97316')}
-          onBlur={e => (e.currentTarget.style.borderColor = '#1e293b')}
+          onFocus={(e) => (e.currentTarget.style.borderColor = '#f97316')}
+          onBlur={(e) => (e.currentTarget.style.borderColor = '#1e293b')}
         />
       </div>
 
@@ -272,7 +313,7 @@ export default function AmazonBulkImageDownloader() {
           { label: 'ASINs', value: parsed.asinCount, icon: <Package size={13} />, color: '#f97316', warn: false },
           { label: 'Images', value: parsed.imageCount, icon: <ImageIcon size={13} />, color: '#38bdf8', warn: false },
           { label: 'Issues', value: parsed.invalid, icon: <AlertTriangle size={13} />, color: '#fbbf24', warn: parsed.invalid > 0 },
-        ].map(s => (
+        ].map((s) => (
           <div key={s.label} style={{
             background: s.warn && s.value > 0 ? 'rgba(251,191,36,0.05)' : '#0a0f1a',
             border: `1.5px solid ${s.warn && s.value > 0 ? 'rgba(251,191,36,0.25)' : '#1e293b'}`,
@@ -441,17 +482,12 @@ export default function AmazonBulkImageDownloader() {
           <span style={{ color: '#334155' }}>├─ </span><span style={{ color: '#38bdf8' }}>B08N5WRWNW/</span><br />
           <span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.MAIN.jpg</span><br />
           <span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT01.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT02.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT03.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT04.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT05.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT06.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT07.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT08.jpg</span><br />
-<span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT09.jpg</span><br />
-<span style={{ color: '#334155' }}>│  └─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT10.jpg</span><br />
-          <span style={{ color: '#334155' }}>└─ </span><span style={{ color: '#38bdf8' }}>B09X7DKTLP/</span><br />
-          <span style={{ color: '#334155' }}>   └─ </span><span style={{ color: '#94a3b8' }}>B09X7DKTLP.MAIN.jpg</span>
+          <span style={{ color: '#334155' }}>│  ├─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT02.jpg</span><br />
+          <span style={{ color: '#334155' }}>│  └─ </span><span style={{ color: '#94a3b8' }}>B08N5WRWNW.PT03.jpg</span><br />
+          <span style={{ color: '#334155' }}>├─ </span><span style={{ color: '#38bdf8' }}>B09X7DKTLP/</span><br />
+          <span style={{ color: '#334155' }}>│  └─ </span><span style={{ color: '#94a3b8' }}>B09X7DKTLP.MAIN.jpg</span><br />
+          <span style={{ color: '#334155' }}>└─ </span><span style={{ color: '#94a3b8' }}>error-report.txt</span>
+          <span style={{ color: '#334155' }}> (if any failures)</span>
         </div>
       </div>
 
@@ -461,7 +497,7 @@ export default function AmazonBulkImageDownloader() {
           icon: <Zap size={13} color="#f97316" />,
           bg: '#f9731615', border: '#f9731620',
           title: 'How it works',
-          items: ['Upload CSV or paste ASIN + image URLs', 'Tool renames images to Amazon standard', 'Clean ZIP downloaded in one click'],
+          items: ['Upload CSV/TSV or paste ASIN + image URLs', 'Tool renames images to Amazon standard', 'Clean ZIP downloaded in one click'],
         },
         {
           icon: <Clock size={13} color="#a78bfa" />,
@@ -475,7 +511,7 @@ export default function AmazonBulkImageDownloader() {
           title: 'Why this tool',
           items: ['Manual downloads waste hours per SKU', 'Wrong file names break listings', 'This tool eliminates both problems'],
         },
-      ].map(card => (
+      ].map((card) => (
         <div key={card.title} style={{ background: '#0a0f1a', border: `1.5px solid ${card.border}`, borderRadius: 16, padding: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <div style={{ background: card.bg, borderRadius: 8, padding: 6 }}>{card.icon}</div>
@@ -484,7 +520,7 @@ export default function AmazonBulkImageDownloader() {
             </span>
           </div>
           <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {card.items.map(item => (
+            {card.items.map((item) => (
               <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <ChevronRight size={12} color="#334155" style={{ marginTop: 3, flexShrink: 0 }} />
                 <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.78rem', color: '#475569', lineHeight: 1.5 }}>{item}</span>

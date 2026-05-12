@@ -131,13 +131,10 @@ export const TOOLS: ToolItem[] = [
 
   // --- Assets ---
   {
-    slug: 'amazon-image-tool',
-    label: 'Image Editor',
-    desc: 'Resize & Rename Images',
-    group: 'assets',
-    priority: 5
+    slug: 'amazon-image-tool', label: 'Image Editor', desc: 'Resize & Rename Images', group: 'assets', priority: 5
   },
   { slug: 'sku-generator', label: 'SKU Generator', desc: 'Smart custom SKUs', group: 'assets' },
   { slug: 'qr-generator', label: 'QR Generator', desc: 'QR codes for inserts', group: 'assets' },
   { slug: 'barcode-generator', label: 'Barcode Generator', desc: 'FNSKU / UPC labels', group: 'assets' },
+  { slug: 'amazon-bulk-image-dwn-tool', label: 'Bulk Image Downloader', desc: 'Download multiple images at once', group: 'assets' }
 ];
