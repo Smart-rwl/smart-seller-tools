@@ -1,11 +1,6 @@
 // app/api/amazon-bulk-image-dwn-tool/route.ts
 import { NextResponse } from 'next/server';
-// archiver is CommonJS (uses `export =`). Different bundlers handle this
-// differently: some give us the function directly, Turbopack wraps it in
-// `{ default: fn }`. Unwrap defensively so it works in every build.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const archiverPkg = require('archiver');
-const archiver: typeof import('archiver') = archiverPkg.default ?? archiverPkg;
+import { zip as fflateZip } from 'fflate';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // seconds; Vercel Pro respects this, Hobby caps at 10
@@ -19,7 +14,7 @@ const CONCURRENCY = 8;
 type ErrorRow = { asin: string; url: string; reason: string };
 type Row = { asin: string; urls: string[] };
 type Job = { asin: string; url: string; positionInAsin: number };
-type FetchOk = { ok: true; buffer: Buffer; ext: string };
+type FetchOk = { ok: true; data: Uint8Array; ext: string };
 type FetchErr = { ok: false; error: ErrorRow };
 type FetchResult = FetchOk | FetchErr;
 
@@ -53,7 +48,6 @@ function parseRows(rawData: string): Row[] {
     if (parts.length < 2) continue;
 
     const asin = parts[0];
-    // De-dupe URLs and only keep http(s) ones
     const seen = new Set<string>();
     const urls: string[] = [];
     for (const p of parts.slice(1)) {
@@ -122,7 +116,7 @@ async function fetchImage(job: Job): Promise<FetchResult> {
 
     return {
       ok: true,
-      buffer: Buffer.from(arr),
+      data: new Uint8Array(arr),
       ext: detectExt(job.url, contentType),
     };
   } catch (e: unknown) {
@@ -155,6 +149,16 @@ async function mapWithConcurrency<T, R>(
     Array.from({ length: Math.min(limit, items.length) }, worker)
   );
   return results;
+}
+
+// Promisified fflate zip
+function buildZip(files: Record<string, Uint8Array>): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    fflateZip(files, { level: 9 }, (err, data) => {
+      if (err) reject(err);
+      else resolve(data);
+    });
+  });
 }
 
 // --- Route ---
@@ -206,19 +210,8 @@ export async function POST(req: Request) {
       fetchImage(job)
     );
 
-    // Build ZIP in memory (reliable across Next.js runtimes)
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    const chunks: Buffer[] = [];
-
-    const archiveDone = new Promise<void>((resolve, reject) => {
-      archive.on('data', (chunk: Buffer) => chunks.push(chunk));
-      archive.on('warning', (err: NodeJS.ErrnoException) => {
-        if (err.code !== 'ENOENT') reject(err);
-      });
-      archive.on('error', reject);
-      archive.on('end', () => resolve());
-    });
-
+    // Build the in-memory file map for fflate
+    const files: Record<string, Uint8Array> = {};
     const errors: ErrorRow[] = [];
     let successCount = 0;
 
@@ -233,13 +226,11 @@ export async function POST(req: Request) {
         job.positionInAsin === 0
           ? `${job.asin}/${job.asin}.MAIN.${result.ext}`
           : `${job.asin}/${job.asin}.PT${String(job.positionInAsin).padStart(2, '0')}.${result.ext}`;
-      archive.append(result.buffer, { name: filename });
+      files[filename] = result.data;
       successCount++;
     }
 
-    // If nothing succeeded, don't ship a useless archive — surface why
     if (successCount === 0) {
-      archive.destroy();
       return NextResponse.json(
         {
           error: 'All image downloads failed',
@@ -253,20 +244,17 @@ export async function POST(req: Request) {
     if (errors.length) {
       const header = 'ASIN\tURL\tReason\n';
       const lines = errors.map((e) => `${e.asin}\t${e.url}\t${e.reason}`).join('\n');
-      archive.append(header + lines, { name: 'error-report.txt' });
+      files['error-report.txt'] = new TextEncoder().encode(header + lines);
     }
 
-    await archive.finalize();
-    await archiveDone;
+    const zipBytes = await buildZip(files);
 
-    const zipBuffer = Buffer.concat(chunks);
-
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(Buffer.from(zipBytes), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': 'attachment; filename="amazon-images.zip"',
-        'Content-Length': String(zipBuffer.length),
+        'Content-Length': String(zipBytes.byteLength),
         'X-Image-Count': String(successCount),
         'X-Error-Count': String(errors.length),
         'Cache-Control': 'no-store',
