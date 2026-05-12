@@ -80,6 +80,7 @@ export interface Tool {
   description?: string;
   /** Used for filter pills and grouping */
   category: ToolCategory;
+  
   /** Lucide icon component (defaults to Zap in the UI if omitted) */
   icon?: LucideIcon;
   /** Extra terms the search bar should match */
@@ -90,8 +91,13 @@ export interface Tool {
   isPro?: boolean;
   /** Featured ranking. Lower number = surfaced higher. */
   priority?: number;
-  /** SEO metadata for the tool's page */
+  /** SEO metadata for these tool's page */
   seo?: ToolSEO;
+  // Legacy aliases (to keep old code working without type errors)
+  group?: string;
+  // Legacy alias (to keep old code working without type errors)
+  desc?: string;
+  // Legacy aliases (to keep old code working without type errors)
 }
 
 /* ────────────────────────────────────────────────
