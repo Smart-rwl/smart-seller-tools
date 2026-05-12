@@ -1,9 +1,11 @@
 // app/api/amazon-bulk-image-dwn-tool/route.ts
 import { NextResponse } from 'next/server';
-// archiver is CommonJS (uses `export =`); Turbopack doesn't synthesize a default
-// for it, so we use require. Typed via the package's own type declarations.
+// archiver is CommonJS (uses `export =`). Different bundlers handle this
+// differently: some give us the function directly, Turbopack wraps it in
+// `{ default: fn }`. Unwrap defensively so it works in every build.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const archiver: typeof import('archiver') = require('archiver');
+const archiverPkg = require('archiver');
+const archiver: typeof import('archiver') = archiverPkg.default ?? archiverPkg;
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // seconds; Vercel Pro respects this, Hobby caps at 10
