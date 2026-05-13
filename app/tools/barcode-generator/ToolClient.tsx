@@ -1,449 +1,1607 @@
+// app/tools/barcode-generator/ToolClient.tsx
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import Barcode from 'react-barcode';
 import QRCode from 'react-qr-code';
-import { Scanner } from '@yudiel/react-qr-scanner';
-import { 
-  Printer, 
-  Download, 
-  Settings, 
-  Barcode as BarcodeIcon, 
-  Copy, 
-  CheckCircle2, 
-  BookOpen, 
-  Info, 
-  Package, 
-  Layers,
-  Move,
-  FileText,
+import {
   AlertOctagon,
+  BookOpen,
   CalendarClock,
-  Factory
+  CheckCircle2,
+  Copy,
+  Download,
+  Factory,
+  FileText,
+  Layers,
+  Loader2,
+  Move,
+  Package,
+  Plus,
+  Printer,
+  QrCode,
+  Save,
+  Settings,
+  Trash2,
+  Barcode as BarcodeIcon,
 } from 'lucide-react';
 
-// FIX: We will import html2canvas and jsPDF dynamically inside the function
-// import html2canvas from 'html2canvas'; 
-// import jsPDF from 'jspdf';
+/* ────────────────────────────────────────────────
+   Types & constants
+──────────────────────────────────────────────── */
 
-export default function AdvancedBarcodeGenerator() {
-  // --- STATE: DATA ---
-  const [value, setValue] = useState('X001234567'); 
-  const [title, setTitle] = useState('Wireless Headphones - Noise Cancelling - Black'); 
-  const [condition, setCondition] = useState('New'); 
-  const [expiryDate, setExpiryDate] = useState('');
-  const [supplierCode, setSupplierCode] = useState('FAC-A1');
+type Mode = 'fnsku' | 'qr';
 
-  const [batchNumber, setBatchNumber] = useState('BATCH-2024-Q1');
-  const [manufactureDate, setManufactureDate] = useState('2024-01-15');
-  const [countryOfOrigin, setCountryOfOrigin] = useState('CN');
-  const [weight, setWeight] = useState('250');
-  const [dimensions, setDimensions] = useState({ length: '15', width: '10', height: '5' });
+type FnskuRow = {
+  id: string;
+  fnsku: string;
+  title: string;
+  condition: 'New' | 'Used' | 'Refurbished';
+  expiryDate: string;       // YYYY-MM-DD or ''
+  supplierCode: string;
+  batchNumber: string;
+  category: CategoryKey;
+  quantity: number;
+};
 
-  // --- STATE: CONFIG ---
-  const [format, setFormat] = useState('CODE128');
-  const [width, setWidth] = useState(1.5);
-  const [height, setHeight] = useState(50);
-  const [fontSize, setFontSize] = useState(11);
-  const [showText, setShowText] = useState(true);
-  
-  // --- STATE: LAYOUT & PRINT ---
-  const [quantity, setQuantity] = useState(30); 
-  const [layoutMode, setLayoutMode] = useState<'single' | 'sheet'>('sheet');
-  const [pageSize, setPageSize] = useState<'a4' | 'a5' | 'letter'>('a4');
-  const [gridConfig, setGridConfig] = useState({ cols: 3, rows: 10 });
-  const [marginTop, setMarginTop] = useState(10);
-  const [marginLeft, setMarginLeft] = useState(5);
-  const [gapX, setGapX] = useState(5);
+type QrRow = {
+  id: string;
+  data: string;       // URL or text
+  label: string;      // shown above QR
+  quantity: number;
+};
 
-  const [useQRCode, setUseQRCode] = useState(false);
-  const [qrData, setQrData] = useState('https://www.amazon.com/dp/B08N5WRWNW');
-  const [batchSKUs, setBatchSKUs] = useState([
-    { id: 1, value: 'X001234567', title: 'Wireless Headphones', quantity: 10 },
-    { id: 2, value: 'X002345678', title: 'USB-C Cable', quantity: 20 }
+type CategoryKey = 'general' | 'supplements' | 'food' | 'electronics' | 'beauty';
+
+const CATEGORIES: { key: CategoryKey; label: string; requiresExpiry?: boolean; requiresBatch?: boolean }[] = [
+  { key: 'general', label: 'General' },
+  { key: 'supplements', label: 'Supplements', requiresExpiry: true, requiresBatch: true },
+  { key: 'food', label: 'Food / Grocery', requiresExpiry: true, requiresBatch: true },
+  { key: 'electronics', label: 'Electronics', requiresBatch: true },
+  { key: 'beauty', label: 'Beauty / Topical', requiresExpiry: true },
+];
+
+type GridPresetKey = '30up' | '24up' | '20up' | '14up';
+const GRID_PRESETS: Record<GridPresetKey, { cols: number; rows: number; label: string }> = {
+  '30up': { cols: 3, rows: 10, label: '3 × 10  (30-up)' },
+  '24up': { cols: 3, rows: 8, label: '3 × 8  (24-up)' },
+  '20up': { cols: 4, rows: 5, label: '4 × 5  (20-up)' },
+  '14up': { cols: 2, rows: 7, label: '2 × 7  (14-up)' },
+};
+
+type PageSize = 'a4' | 'a5' | 'letter';
+const PAGE_DIMENSIONS_MM: Record<PageSize, [number, number]> = {
+  a4: [210, 297],
+  a5: [148, 210],
+  letter: [215.9, 279.4],
+};
+
+const STORAGE_KEY = 'smartrwl:fba-labels:v1';
+
+const FNSKU_PATTERN = /^X[0-9A-Z]{9}$/i;     // FNSKU: X + 9 alphanumeric
+const ASIN_PATTERN = /^B[0-9A-Z]{9}$/i;       // ASIN starts with B
+const TITLE_MAX = 80;
+
+const safeNum = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+};
+
+const newId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const blankFnskuRow = (): FnskuRow => ({
+  id: newId(),
+  fnsku: '',
+  title: '',
+  condition: 'New',
+  expiryDate: '',
+  supplierCode: '',
+  batchNumber: '',
+  category: 'general',
+  quantity: 30,
+});
+
+const blankQrRow = (): QrRow => ({
+  id: newId(),
+  data: '',
+  label: '',
+  quantity: 30,
+});
+
+/* ────────────────────────────────────────────────
+   Compliance — pure, derived per row
+──────────────────────────────────────────────── */
+
+type Issue = { severity: 'error' | 'warning'; message: string };
+
+function checkFnskuRow(row: FnskuRow): Issue[] {
+  const issues: Issue[] = [];
+  const v = row.fnsku.trim().toUpperCase();
+
+  if (!v) {
+    issues.push({ severity: 'error', message: 'FNSKU is required.' });
+  } else if (ASIN_PATTERN.test(v) && !FNSKU_PATTERN.test(v)) {
+    issues.push({
+      severity: 'error',
+      message: 'This looks like an ASIN (B0…). Printing ASINs causes commingling — use the FNSKU (X…).',
+    });
+  } else if (!FNSKU_PATTERN.test(v)) {
+    issues.push({
+      severity: 'warning',
+      message: 'FNSKU should be X + 9 alphanumeric characters (e.g. X001234567).',
+    });
+  }
+
+  if (!row.title.trim()) {
+    issues.push({ severity: 'error', message: 'Title is required.' });
+  } else if (row.title.length > TITLE_MAX) {
+    issues.push({
+      severity: 'warning',
+      message: `Title is ${row.title.length} chars — Amazon truncates at ${TITLE_MAX}.`,
+    });
+  }
+
+  if (row.quantity <= 0) {
+    issues.push({ severity: 'warning', message: 'Quantity is 0 — this row will not print.' });
+  }
+
+  const cat = CATEGORIES.find((c) => c.key === row.category)!;
+  if (cat.requiresExpiry && !row.expiryDate) {
+    issues.push({
+      severity: 'warning',
+      message: `${cat.label} typically requires an expiry date.`,
+    });
+  }
+  if (cat.requiresBatch && !row.batchNumber.trim()) {
+    issues.push({
+      severity: 'warning',
+      message: `${cat.label} should include a batch / lot number.`,
+    });
+  }
+
+  return issues;
+}
+
+function checkQrRow(row: QrRow): Issue[] {
+  const issues: Issue[] = [];
+  if (!row.data.trim()) {
+    issues.push({ severity: 'error', message: 'QR code data is required.' });
+  } else if (row.data.length > 2000) {
+    issues.push({
+      severity: 'warning',
+      message: 'Long payloads make QR codes harder to scan — keep under 300 chars where possible.',
+    });
+  }
+  if (row.quantity <= 0) {
+    issues.push({ severity: 'warning', message: 'Quantity is 0 — this row will not print.' });
+  }
+  return issues;
+}
+
+/* ────────────────────────────────────────────────
+   Print HTML builder (pure)
+──────────────────────────────────────────────── */
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+type PrintOptions = {
+  pageSize: PageSize;
+  cols: number;
+  rows: number;
+  marginTopMm: number;
+  marginLeftMm: number;
+  gapXMm: number;
+  gapYMm: number;
+};
+
+function buildFnskuPageHtml(
+  pageItems: FnskuRow[],
+  svgFor: (value: string) => string,
+  options: PrintOptions
+): string {
+  const labelHtml = pageItems
+    .map((item) => {
+      const svg = svgFor(item.fnsku.trim().toUpperCase());
+      const expiry = item.expiryDate
+        ? `<span class="exp">EXP ${escapeHtml(item.expiryDate)}</span>`
+        : '';
+      const batch = item.batchNumber.trim()
+        ? `<div class="aux">LOT ${escapeHtml(item.batchNumber.trim())}</div>`
+        : '';
+      const supplier = item.supplierCode.trim()
+        ? `<div class="aux">${escapeHtml(item.supplierCode.trim())}</div>`
+        : '';
+      return `
+        <div class="label">
+          <div class="title">${escapeHtml(item.title)}</div>
+          <div class="symbol">${svg}</div>
+          <div class="meta">
+            <span class="cond">${escapeHtml(item.condition)}</span>
+            ${expiry}
+          </div>
+          ${batch}
+          ${supplier}
+        </div>
+      `;
+    })
+    .join('');
+
+  return buildPageHtml(labelHtml, options);
+}
+
+function buildQrPageHtml(
+  pageItems: QrRow[],
+  svgFor: (value: string) => string,
+  options: PrintOptions
+): string {
+  const labelHtml = pageItems
+    .map((item) => {
+      const svg = svgFor(item.data);
+      const label = item.label.trim()
+        ? `<div class="title">${escapeHtml(item.label)}</div>`
+        : '';
+      return `
+        <div class="label qr">
+          ${label}
+          <div class="symbol">${svg}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  return buildPageHtml(labelHtml, options);
+}
+
+function buildPageHtml(innerHtml: string, options: PrintOptions): string {
+  const { pageSize, cols, rows, marginTopMm, marginLeftMm, gapXMm, gapYMm } = options;
+  const [w, h] = PAGE_DIMENSIONS_MM[pageSize];
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>FBA labels</title>
+<style>
+  @page { size: ${w}mm ${h}mm; margin: 0; }
+  html, body { margin: 0; padding: 0; background: white; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #000; }
+  .sheet {
+    width: ${w}mm;
+    min-height: ${h}mm;
+    padding: ${marginTopMm}mm ${marginLeftMm}mm;
+    box-sizing: border-box;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(${cols}, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+    column-gap: ${gapXMm}mm;
+    row-gap: ${gapYMm}mm;
+  }
+  .label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    aspect-ratio: ${cols} / ${rows * 1.25};
+  }
+  .label .symbol { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; width: 100%; }
+  .label .symbol svg { max-width: 100%; max-height: 100%; height: auto; }
+  .label.qr .symbol svg { max-width: 75%; }
+  .title {
+    font-size: 7pt;
+    line-height: 1.15;
+    margin-bottom: 0.8mm;
+    width: 100%;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 6pt;
+    font-weight: 700;
+    margin-top: 0.6mm;
+    text-transform: uppercase;
+  }
+  .aux { font-size: 5.5pt; color: #444; }
+  @media screen {
+    .label { outline: 0.2mm dashed #ddd; }
+  }
+</style>
+</head>
+<body>
+  <div class="sheet"><div class="grid">${innerHtml}</div></div>
+</body>
+</html>`;
+}
+
+function expandFnsku(rows: FnskuRow[]): FnskuRow[] {
+  const out: FnskuRow[] = [];
+  for (const r of rows) {
+    if (!r.fnsku.trim() || !r.title.trim()) continue;
+    for (let i = 0; i < r.quantity; i++) out.push(r);
+  }
+  return out;
+}
+
+function expandQr(rows: QrRow[]): QrRow[] {
+  const out: QrRow[] = [];
+  for (const r of rows) {
+    if (!r.data.trim()) continue;
+    for (let i = 0; i < r.quantity; i++) out.push(r);
+  }
+  return out;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/* ────────────────────────────────────────────────
+   Component
+──────────────────────────────────────────────── */
+
+export default function BarcodeGenerator() {
+  const [mode, setMode] = useState<Mode>('fnsku');
+  const [fnskuRows, setFnskuRows] = useState<FnskuRow[]>(() => [
+    {
+      ...blankFnskuRow(),
+      fnsku: 'X001234567',
+      title: 'Wireless Headphones — Noise Cancelling — Black',
+      category: 'electronics',
+      batchNumber: 'BATCH-2024-Q1',
+      supplierCode: 'FAC-A1',
+      quantity: 30,
+    },
+  ]);
+  const [qrRows, setQrRows] = useState<QrRow[]>(() => [
+    {
+      ...blankQrRow(),
+      data: 'https://www.amazon.com/dp/B08N5WRWNW',
+      label: 'Scan for product manual',
+      quantity: 30,
+    },
   ]);
 
-  const [template, setTemplate] = useState('standard');
-  const labelTemplates = {
-    standard: { name: 'Standard FBA', settings: { format: 'CODE128', width: 1.5, height: 50, fontSize: 11 } },
-    small: { name: 'Small Item', settings: { format: 'CODE128', width: 1, height: 30, fontSize: 9 } },
-    clothing: { name: 'Clothing Tag', settings: { format: 'CODE128', width: 1.2, height: 40, fontSize: 10 } },
-  };
+  const [pageSize, setPageSize] = useState<PageSize>('a4');
+  const [gridPreset, setGridPreset] = useState<GridPresetKey>('30up');
+  const [marginTopMm, setMarginTopMm] = useState(10);
+  const [marginLeftMm, setMarginLeftMm] = useState(5);
+  const [gapXMm, setGapXMm] = useState(5);
+  const [gapYMm, setGapYMm] = useState(5);
 
-  const [amazonCategory, setAmazonCategory] = useState('electronics');
-  const [categoryWarnings, setCategoryWarnings] = useState<string[]>([]);
-  const [complianceIssues, setComplianceIssues] = useState<string[]>([]);
-  const [showScanner, setShowScanner] = useState(false);
-  const [scanResult, setScanResult] = useState('');
+  const [busy, setBusy] = useState<'print' | 'pdf' | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  const barcodeRef = useRef<HTMLDivElement>(null);
-
-  const isAsin = value.startsWith('B0');
+  /* ── Load + save persistence ── */
 
   useEffect(() => {
-    const issues = [];
-    if (amazonCategory === 'supplements' && !expiryDate) {
-      issues.push('Supplements require an expiry date.');
-    }
-    if (amazonCategory === 'electronics' && !batchNumber) {
-      issues.push('Electronics should include a batch/lot number for warranty tracking.');
-    }
-    setCategoryWarnings(issues);
-  }, [amazonCategory, expiryDate, batchNumber]);
-
-  // --- ACTIONS ---
-
-  const handlePrint = () => {
-    const sizeMap = { a4: '210mm 297mm', a5: '148mm 210mm', letter: '8.5in 11in' };
-    const win = window.open('', '', 'height=900,width=800');
-    if (!win) return;
-
-    win.document.write('<html><head><title>FBA Print Job</title>');
-    win.document.write(`
-      <style>
-        @page { size: ${sizeMap[pageSize]}; margin: 0; }
-        body { margin: 0; padding: 0; font-family: sans-serif; }
-        .print-container { padding-top: ${marginTop}mm; padding-left: ${marginLeft}mm; width: 100%; box-sizing: border-box; }
-        .label-grid { display: grid; grid-template-columns: repeat(${gridConfig.cols}, 1fr); column-gap: ${gapX}mm; row-gap: 5mm; }
-        .label-item { border: 1px dashed #ccc; padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 140px; page-break-inside: avoid; }
-        .label-title { font-size: 10px; margin-bottom: 2px; max-width: 95%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-        .label-meta { font-size: 9px; font-weight: bold; margin-top: 2px; }
-        .label-supplier { font-size: 8px; color: #666; margin-top: 2px; }
-        .label-expiry { font-size: 10px; font-weight: bold; margin-top: 2px; }
-        @media print { .label-item { border: none; } }
-      </style>
-    `);
-    win.document.write('</head><body><div class="print-container"><div class="label-grid">');
-
-    let labelHtml = '';
-    for (const sku of batchSKUs) {
-      if (sku.quantity <= 0) continue;
-      for (let i = 0; i < sku.quantity; i++) {
-        labelHtml += `
-          <div class="label-item">
-            <div class="label-title">${sku.title}</div>
-            <svg class="barcode" value="${sku.value}" format="CODE128" width="1.2" height="40" fontoptions="font-size: 11px"></svg>
-            <div class="label-meta">${condition}</div>
-            ${supplierCode ? `<div class="label-supplier">${supplierCode}</div>` : ''}
-          </div>
-        `;
-      }
-    }
-    win.document.write(labelHtml);
-    
-    win.document.write('</div></div></body></html>');
-    win.document.close();
-
-    win.onload = () => {
-      // @ts-ignore
-      JsBarcode(".barcode").init();
-      setTimeout(() => win.print(), 500);
-    };
-  };
-
-  const handleDownloadSVG = () => {
-    const svg = barcodeRef.current?.querySelector('svg');
-    if (svg) {
-      const svgData = new XMLSerializer().serializeToString(svg);
-      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${value}.svg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  // FIX: Use dynamic import for html2canvas to avoid server-side errors
-  const handleDownloadPNG = async () => {
-    const element = barcodeRef.current;
-    if (!element) return;
-
-    // Dynamically import html2canvas
-    const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(element);
-    const dataURL = canvas.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = `${value}.png`;
-    link.href = dataURL;
-    link.click();
-  };
-
-    // FIX: Use a more robust dynamic import for jsPDF
-  const handleDownloadPDF = async () => {
-    const element = barcodeRef.current;
-    if (!element) return;
-
+    if (typeof window === 'undefined') return;
     try {
-      // Dynamically import both libraries
-      const html2canvas = (await import('html2canvas')).default;
-      // Use destructuring to get the jsPDF constructor
-      const { jsPDF } = await import('jspdf');
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed.mode === 'fnsku' || parsed.mode === 'qr') setMode(parsed.mode);
+      if (Array.isArray(parsed.fnskuRows) && parsed.fnskuRows.length) {
+        setFnskuRows(parsed.fnskuRows);
+      }
+      if (Array.isArray(parsed.qrRows) && parsed.qrRows.length) {
+        setQrRows(parsed.qrRows);
+      }
+      if (parsed.pageSize) setPageSize(parsed.pageSize);
+      if (parsed.gridPreset) setGridPreset(parsed.gridPreset);
+      if (typeof parsed.marginTopMm === 'number') setMarginTopMm(parsed.marginTopMm);
+      if (typeof parsed.marginLeftMm === 'number') setMarginLeftMm(parsed.marginLeftMm);
+      if (typeof parsed.gapXMm === 'number') setGapXMm(parsed.gapXMm);
+      if (typeof parsed.gapYMm === 'number') setGapYMm(parsed.gapYMm);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-      const canvas = await html2canvas(element);
-      const imgData = canvas.toDataURL('image/png');
-      
-      // Create a new jsPDF instance
-      const pdf = new jsPDF({
-        orientation: 'landscape', // Optional: good for wide barcodes
-        unit: 'px', // Use pixels for consistency with canvas
-        format: [canvas.width, canvas.height] // Optional: match PDF size to canvas
+  // Auto-save (debounced)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            mode,
+            fnskuRows,
+            qrRows,
+            pageSize,
+            gridPreset,
+            marginTopMm,
+            marginLeftMm,
+            gapXMm,
+            gapYMm,
+          })
+        );
+        setSaved(true);
+        // Reset the badge after a short delay
+        setTimeout(() => setSaved(false), 1200);
+      } catch {
+        /* quota — ignore */
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [mode, fnskuRows, qrRows, pageSize, gridPreset, marginTopMm, marginLeftMm, gapXMm, gapYMm]);
+
+  /* ── Derived ── */
+
+  const grid = GRID_PRESETS[gridPreset];
+
+  const fnskuIssues = useMemo(
+    () => fnskuRows.map((r) => ({ id: r.id, issues: checkFnskuRow(r) })),
+    [fnskuRows]
+  );
+  const qrIssues = useMemo(
+    () => qrRows.map((r) => ({ id: r.id, issues: checkQrRow(r) })),
+    [qrRows]
+  );
+
+  const totalLabels = useMemo(() => {
+    if (mode === 'fnsku') {
+      return fnskuRows.reduce(
+        (s, r) => s + (r.fnsku.trim() && r.title.trim() ? r.quantity : 0),
+        0
+      );
+    }
+    return qrRows.reduce((s, r) => s + (r.data.trim() ? r.quantity : 0), 0);
+  }, [mode, fnskuRows, qrRows]);
+
+  const totalPages = Math.max(1, Math.ceil(totalLabels / (grid.cols * grid.rows)));
+
+  // Unique symbol values used across rows — we render one barcode per unique value
+  // into a hidden subtree, then re-use the serialized SVG across copies.
+  const uniqueSymbols = useMemo(() => {
+    if (mode === 'fnsku') {
+      const set = new Set<string>();
+      for (const r of fnskuRows) {
+        const v = r.fnsku.trim().toUpperCase();
+        if (v) set.add(v);
+      }
+      return Array.from(set);
+    }
+    const set = new Set<string>();
+    for (const r of qrRows) {
+      if (r.data.trim()) set.add(r.data);
+    }
+    return Array.from(set);
+  }, [mode, fnskuRows, qrRows]);
+
+  /* ── Row actions ── */
+
+  const updateFnsku = useCallback(<K extends keyof FnskuRow>(id: string, field: K, value: FnskuRow[K]) => {
+    setFnskuRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    );
+  }, []);
+  const updateQr = useCallback(<K extends keyof QrRow>(id: string, field: K, value: QrRow[K]) => {
+    setQrRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    );
+  }, []);
+
+  const addFnsku = () => setFnskuRows((p) => [...p, blankFnskuRow()]);
+  const addQr = () => setQrRows((p) => [...p, blankQrRow()]);
+
+  const duplicateFnsku = (id: string) =>
+    setFnskuRows((p) => {
+      const idx = p.findIndex((r) => r.id === id);
+      if (idx === -1) return p;
+      const copy = { ...p[idx], id: newId() };
+      return [...p.slice(0, idx + 1), copy, ...p.slice(idx + 1)];
+    });
+  const duplicateQr = (id: string) =>
+    setQrRows((p) => {
+      const idx = p.findIndex((r) => r.id === id);
+      if (idx === -1) return p;
+      const copy = { ...p[idx], id: newId() };
+      return [...p.slice(0, idx + 1), copy, ...p.slice(idx + 1)];
+    });
+
+  const removeFnsku = (id: string) =>
+    setFnskuRows((p) => (p.length > 1 ? p.filter((r) => r.id !== id) : p));
+  const removeQr = (id: string) =>
+    setQrRows((p) => (p.length > 1 ? p.filter((r) => r.id !== id) : p));
+
+  /* ── SVG harvest ── */
+
+  // We keep refs to containers holding the rendered Barcode / QRCode SVGs.
+  // serializeSymbol(value) returns the SVG outerHTML for embedding into print/PDF.
+  const symbolRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const serializeSymbol = useCallback((value: string): string => {
+    const node = symbolRefs.current.get(value);
+    const svg = node?.querySelector('svg');
+    if (!svg) return '';
+    // Clone to avoid mutating the live tree
+    const clone = svg.cloneNode(true) as SVGElement;
+    // Ensure xmlns is on the root SVG
+    if (!clone.getAttribute('xmlns')) {
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    return new XMLSerializer().serializeToString(clone);
+  }, []);
+
+  /* ── Print + PDF ── */
+
+  const printOptions: PrintOptions = {
+    pageSize,
+    cols: grid.cols,
+    rows: grid.rows,
+    marginTopMm,
+    marginLeftMm,
+    gapXMm,
+    gapYMm,
+  };
+
+  const handlePrint = async () => {
+    if (totalLabels === 0) return;
+    setBusy('print');
+    try {
+      const win = window.open('', '_blank', 'width=900,height=900');
+      if (!win) {
+        alert('Pop-up blocked. Allow pop-ups for this site to print.');
+        return;
+      }
+
+      // Build all pages into a single HTML doc (CSS handles pagination via page-break)
+      const labels =
+        mode === 'fnsku' ? expandFnsku(fnskuRows) : expandQr(qrRows);
+
+      const labelsPerPage = grid.cols * grid.rows;
+      const pages = chunk(labels, labelsPerPage);
+
+      const pageHtmls = pages
+        .map((pageItems) => {
+          if (mode === 'fnsku') {
+            return buildFnskuPageHtml(
+              pageItems as FnskuRow[],
+              (v) => serializeSymbol(v.trim().toUpperCase()),
+              printOptions
+            );
+          }
+          return buildQrPageHtml(
+            pageItems as QrRow[],
+            (v) => serializeSymbol(v),
+            printOptions
+          );
+        })
+        .map((html) => {
+          // Strip the wrapping <html><body> from each page and keep just the .sheet
+          const match = html.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+          return match ? match[1] : html;
+        })
+        .join('<div style="page-break-after: always;"></div>');
+
+      // Take the <style> block from the first page builder output
+      const styleMatch = buildPageHtml('', printOptions).match(/<style[\s\S]*?<\/style>/);
+      const styleBlock = styleMatch ? styleMatch[0] : '';
+
+      const fullHtml = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8" /><title>FBA labels</title>
+${styleBlock}
+</head><body>${pageHtmls}</body></html>`;
+
+      win.document.open();
+      win.document.write(fullHtml);
+      win.document.close();
+
+      // Wait for content paint
+      await new Promise((r) => setTimeout(r, 350));
+      win.focus();
+      win.print();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (totalLabels === 0) return;
+    setBusy('pdf');
+    try {
+      const [{ default: html2canvas }, jspdfMod] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+      const JsPdf = (jspdfMod as { jsPDF: typeof import('jspdf').jsPDF }).jsPDF ??
+        (jspdfMod as { default: typeof import('jspdf').jsPDF }).default;
+
+      const [pageWmm, pageHmm] = PAGE_DIMENSIONS_MM[pageSize];
+      const pdf = new JsPdf({
+        unit: 'mm',
+        format: [pageWmm, pageHmm],
+        orientation: 'portrait',
       });
 
-      // --- DEBUGGING STEP ---
-      // Check your browser's developer console (F12).
-      // It should log the jsPDF object and show that it has the 'addImage' function.
-      console.log('jsPDF object:', pdf); 
-      // --------------------
+      const labels =
+        mode === 'fnsku' ? expandFnsku(fnskuRows) : expandQr(qrRows);
+      const labelsPerPage = grid.cols * grid.rows;
+      const pages = chunk(labels, labelsPerPage);
 
-      // Add the image to the PDF
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`${value}.pdf`);
+      // Render each page into an offscreen container, html2canvas it, add to PDF
+      for (let i = 0; i < pages.length; i++) {
+        const html =
+          mode === 'fnsku'
+            ? buildFnskuPageHtml(
+                pages[i] as FnskuRow[],
+                (v) => serializeSymbol(v.trim().toUpperCase()),
+                printOptions
+              )
+            : buildQrPageHtml(
+                pages[i] as QrRow[],
+                (v) => serializeSymbol(v),
+                printOptions
+              );
 
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      alert("Could not generate PDF. See console for details.");
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.left = '-99999px';
+        container.style.top = '0';
+        container.style.width = `${pageWmm}mm`;
+        container.style.background = 'white';
+        container.innerHTML = html;
+        document.body.appendChild(container);
+
+        try {
+          // Target the .sheet inside the constructed HTML
+          const sheet = container.querySelector('.sheet') as HTMLElement | null;
+          const target = sheet ?? container;
+          const canvas = await html2canvas(target, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+          });
+          const imgData = canvas.toDataURL('image/png');
+          if (i > 0) pdf.addPage([pageWmm, pageHmm], 'portrait');
+          pdf.addImage(imgData, 'PNG', 0, 0, pageWmm, pageHmm);
+        } finally {
+          document.body.removeChild(container);
+        }
+      }
+
+      pdf.save(`fba-labels-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Could not generate the PDF. See console for details.');
+    } finally {
+      setBusy(null);
     }
   };
 
-  const checkCompliance = () => {
-    const issues = [];
-    if (!value.startsWith('X0')) issues.push('FNSKU should start with "X0" to avoid commingling.');
-    if (title.length > 80) issues.push('Title exceeds Amazon\'s 80 character limit.');
-    if (width < 1 || width > 2) issues.push('Barcode width should be between 1.0 and 2.0 for optimal scanning.');
-    if (fontSize < 10) issues.push('Font size should be at least 10pt for readability.');
-    setComplianceIssues(issues);
+  const handleDownloadSvg = () => {
+    // Download a single SVG for the FIRST row of the current mode
+    const firstValue =
+      mode === 'fnsku'
+        ? fnskuRows[0]?.fnsku.trim().toUpperCase()
+        : qrRows[0]?.data;
+    if (!firstValue) return;
+    const svgString = serializeSymbol(firstValue);
+    if (!svgString) return;
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(firstValue || 'label').replace(/[^A-Z0-9]/gi, '_')}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
+  /* ────────────────────────────────────────────────
+     Render
+  ──────────────────────────────────────────────── */
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-6 md:p-12">
-      <div className="max-w-7xl mx-auto">
-        
+    <div className="min-h-screen bg-slate-950 p-6 font-sans text-slate-200 md:p-12">
+      <div className="mx-auto max-w-7xl">
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
+        <div className="mb-10 flex flex-col items-start justify-between gap-6 border-b border-slate-800 pb-8 md:flex-row md:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <BarcodeIcon className="w-8 h-8 text-indigo-500" />
-              Next-Gen FBA Label Architect
+            <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
+              <BarcodeIcon className="h-8 w-8 text-orange-500" />
+              FBA Label Architect
             </h1>
-            <p className="text-slate-400 mt-2">
-              Strategic inventory tagging with Paper Sizing, Margin Control, Batch Printing, and Compliance Checks.
+            <p className="mt-2 text-slate-400">
+              Batch-print barcode or QR labels with live Amazon compliance checks.
             </p>
+            {saved && (
+              <p className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400">
+                <Save className="h-3 w-3" /> Auto-saved
+              </p>
+            )}
           </div>
-          <div className="flex gap-3 flex-wrap">
-             <button onClick={handleDownloadSVG} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm border border-slate-700 transition">
-                <Download className="w-4 h-4" /> SVG
-             </button>
-             <button onClick={handleDownloadPNG} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm border border-slate-700 transition">
-                <Download className="w-4 h-4" /> PNG
-             </button>
-             <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm border border-slate-700 transition">
-                <Download className="w-4 h-4" /> PDF
-             </button>
-             <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition shadow-lg shadow-indigo-900/20">
-                <Printer className="w-4 h-4" /> Print Batch
-             </button>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-16">
-          
-          {/* --- LEFT: CONFIGURATION (4 Cols) --- */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            {/* 1. Smart Data Input */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-               <h3 className="text-white font-bold flex items-center gap-2 mb-4">
-                  <Settings className="w-4 h-4 text-indigo-400" /> Smart Data
-               </h3>
-               
-               <div className="space-y-4">
-                  <div>
-                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">FNSKU / SKU</label>
-                     <div className="relative">
-                        <input type="text" value={value} onChange={e => setValue(e.target.value)} className={`w-full bg-slate-950 border rounded p-2 text-white font-mono focus:outline-none ${isAsin ? 'border-red-500' : 'border-slate-700 focus:border-indigo-500'}`} />
-                        {value.startsWith('X0') && <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3" />}
-                     </div>
-                     {isAsin && (<div className="flex items-center gap-2 mt-2 text-[10px] text-red-400 bg-red-900/20 p-2 rounded"><AlertOctagon className="w-3 h-3" /><span><b>Warning:</b> Using ASIN (B0...) risks commingling. Use FNSKU (X0...).</span></div>)}
-                  </div>
-                  
-                  <div>
-                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Title</label>
-                     <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-indigo-500 focus:outline-none" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Condition</label><select value={condition} onChange={e => setCondition(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-indigo-500 focus:outline-none"><option value="New">New</option><option value="Used">Used</option></select></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-1"><CalendarClock className="w-3 h-3" /> Expiry (Opt)</label><input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-indigo-500 focus:outline-none" /></div>
-                  </div>
-
-                  <div>
-                     <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-1"><Factory className="w-3 h-3" /> Supplier Code</label>
-                     <input type="text" value={supplierCode} onChange={e => setSupplierCode(e.target.value)} placeholder="e.g. FAC-A1" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-indigo-500 focus:outline-none" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Batch/Lot</label><input type="text" value={batchNumber} onChange={e => setBatchNumber(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">MFG Date</label><input type="date" value={manufactureDate} onChange={e => setManufactureDate(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm" /></div>
-                  </div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Country of Origin</label><select value={countryOfOrigin} onChange={e => setCountryOfOrigin(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm"><option value="CN">China</option><option value="US">United States</option><option value="VN">Vietnam</option></select></div>
-                  
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Amazon Category</label>
-                    <select value={amazonCategory} onChange={e => setAmazonCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm">
-                        <option value="electronics">Electronics</option><option value="supplements">Supplements</option><option value="clothing">Clothing</option>
-                    </select>
-                    {categoryWarnings.length > 0 && (<div className="mt-2 p-2 bg-amber-900/20 border border-amber-500/30 rounded text-xs text-amber-400">{categoryWarnings.map((w,i)=> <div key={i} className="flex items-start gap-2"><AlertOctagon className="w-3 h-3 mt-0.5" /><span>{w}</span></div>)}</div>)}
-                  </div>
-
-                  <div className="flex items-center gap-2"><input type="checkbox" id="useQRCode" checked={useQRCode} onChange={e => setUseQRCode(e.target.checked)} className="rounded" /><label htmlFor="useQRCode" className="text-sm text-slate-300">Use QR Code</label></div>
-                  {useQRCode && (<div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">QR Code Data</label><textarea value={qrData} onChange={e => setQrData(e.target.value)} placeholder="URL or text" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm h-20" /></div>)}
-                  
-                  <div className="border-t border-slate-800 pt-4">
-                    <button onClick={checkCompliance} className="w-full py-2 bg-blue-600/20 border border-blue-500/30 rounded text-sm text-blue-400 hover:bg-blue-600/30 transition">Check Amazon Compliance</button>
-                    {complianceIssues.length > 0 && (<div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-xs text-red-400"><div className="font-bold mb-1">Issues:</div>{complianceIssues.map((issue,i)=> <div key={i} className="flex items-start gap-2 mt-1"><AlertOctagon className="w-3 h-3 mt-0.5" /><span>{issue}</span></div>)}</div>)}
-                    {complianceIssues.length === 0 && amazonCategory && (<div className="mt-2 p-2 bg-emerald-900/20 border border-emerald-500/30 rounded text-xs text-emerald-400 flex items-center gap-2"><CheckCircle2 className="w-3 h-3" /><span>No compliance issues detected</span></div>)}
-                  </div>
-               </div>
-            </div>
-
-            {/* 2. Paper & Layout Engineering */}
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-               <h3 className="text-white font-bold flex items-center gap-2 mb-4">
-                  <Move className="w-4 h-4 text-emerald-400" /> Paper Engineering
-               </h3>
-               
-               <div className="space-y-4">
-                  <div><label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Paper Size</label><div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">{['a4', 'a5', 'letter'].map((size) => (<button key={size} onClick={() => setPageSize(size as any)} className={`flex-1 py-1.5 text-xs font-medium rounded uppercase ${pageSize === size ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>{size}</button>))}</div></div>
-
-                  <div><label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Label Template</label><div className="grid grid-cols-2 gap-2">{Object.entries(labelTemplates).map(([key, tmpl]) => (<button key={key} onClick={() => { setTemplate(key); setFormat(tmpl.settings.format as any); setWidth(tmpl.settings.width); setHeight(tmpl.settings.height); setFontSize(tmpl.settings.fontSize); }} className={`py-2 text-xs font-medium rounded border ${template === key ? 'bg-indigo-900/50 border-indigo-500 text-indigo-300' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>{tmpl.name}</button>))}</div></div>
-
-                  <div><label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Grid Layout</label><div className="flex gap-2"><button onClick={() => { setGridConfig({ cols: 3, rows: 10 }); setQuantity(30); }} className={`flex-1 py-2 text-xs font-medium rounded border ${gridConfig.cols === 3 ? 'bg-indigo-900/50 border-indigo-500 text-indigo-300' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>3 x 10 (30-up)</button><button onClick={() => { setGridConfig({ cols: 4, rows: 5 }); setQuantity(20); }} className={`flex-1 py-2 text-xs font-medium rounded border ${gridConfig.cols === 4 ? 'bg-indigo-900/50 border-indigo-500 text-indigo-300' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>4 x 5 (20-up)</button></div></div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800"><div><label className="text-[10px] text-slate-500 block mb-1">Top (mm)</label><input type="number" value={marginTop} onChange={e => setMarginTop(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-white text-center text-sm" /></div><div><label className="text-[10px] text-slate-500 block mb-1">Left (mm)</label><input type="number" value={marginLeft} onChange={e => setMarginLeft(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-white text-center text-sm" /></div><div><label className="text-[10px] text-slate-500 block mb-1">Gap X (mm)</label><input type="number" value={gapX} onChange={e => setGapX(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-white text-center text-sm" /></div></div>
-               </div>
-            </div>
-
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-              <h3 className="text-white font-bold flex items-center gap-2 mb-4"><Layers className="w-4 h-4 text-purple-400" /> Batch Printing</h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                {batchSKUs.map((sku) => (<div key={sku.id} className="flex items-center gap-2 bg-slate-950 p-2 rounded"><input type="checkbox" checked={sku.quantity > 0} onChange={(e) => { const updated = batchSKUs.map(s => s.id === sku.id ? {...s, quantity: e.target.checked ? 10 : 0} : s); setBatchSKUs(updated); }} className="rounded" /><input type="text" value={sku.value} onChange={(e) => { const updated = batchSKUs.map(s => s.id === sku.id ? {...s, value: e.target.value} : s); setBatchSKUs(updated); }} className="flex-1 bg-slate-900 border border-slate-700 rounded p-1 text-white text-xs" /><input type="text" value={sku.title} onChange={(e) => { const updated = batchSKUs.map(s => s.id === sku.id ? {...s, title: e.target.value} : s); setBatchSKUs(updated); }} className="flex-2 bg-slate-900 border border-slate-700 rounded p-1 text-white text-xs" /><input type="number" value={sku.quantity} onChange={(e) => { const updated = batchSKUs.map(s => s.id === sku.id ? {...s, quantity: parseInt(e.target.value) || 0} : s); setBatchSKUs(updated); }} className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-white text-xs text-center" /></div>))}
-              </div>
-              <button onClick={() => setBatchSKUs([...batchSKUs, { id: Date.now(), value: '', title: '', quantity: 0 }])} className="mt-2 w-full py-1 bg-purple-600/20 border border-purple-500/30 rounded text-xs text-purple-400 hover:bg-purple-600/30 transition">Add SKU</button>
-            </div>
-
-            <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-              <h3 className="text-white font-bold flex items-center gap-2 mb-4"><CheckCircle2 className="w-4 h-4 text-green-400" /> Label Verification</h3>
-              <button onClick={() => setShowScanner(!showScanner)} className="w-full py-2 bg-green-600/20 border border-green-500/30 rounded text-sm text-green-400 hover:bg-green-600/30 transition">{showScanner ? 'Hide Scanner' : 'Scan Barcode to Verify'}</button>
-              {showScanner && (
-                <div className="mt-4">
-                  {/* FIX: Removed the 'components' prop to resolve the 'audio' error */}
-                  <Scanner 
-                    onScan={(result) => { 
-                      setScanResult(result[0].rawValue); 
-                      setShowScanner(false); 
-                    }} 
-                  />
-                </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleDownloadSvg}
+              disabled={!!busy || totalLabels === 0}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" /> SVG
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={!!busy || totalLabels === 0}
+              className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'pdf' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
               )}
-              {scanResult && (<div className="mt-4 p-2 bg-slate-950 rounded text-sm"><div className="text-slate-400">Scanned Value:</div><div className="text-white font-mono">{scanResult}</div><div className="mt-2 text-xs">{scanResult === value ? (<span className="text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Match! Barcode is correct.</span>) : (<span className="text-red-400 flex items-center gap-1"><AlertOctagon className="w-3 h-3" /> Mismatch! Check your label.</span>)}</div></div>)}
-            </div>
-
-          </div>
-
-          {/* --- RIGHT: LIVE PREVIEW (8 Cols) --- */}
-          <div className="lg:col-span-8">
-            <div className="bg-slate-200 rounded-xl border-4 border-slate-800 p-8 min-h-[600px] flex justify-center overflow-auto shadow-inner relative">
-               <div className="bg-white shadow-2xl relative transition-all duration-300" style={{ width: pageSize === 'a4' ? '210mm' : pageSize === 'a5' ? '148mm' : '215.9mm', minHeight: pageSize === 'a4' ? '297mm' : pageSize === 'a5' ? '210mm' : '279.4mm', paddingTop: `${marginTop}mm`, paddingLeft: `${marginLeft}mm`, boxSizing: 'border-box' }}>
-                   <div className="absolute top-0 left-0 w-full border-b border-blue-400/30 text-[8px] text-blue-400" style={{ height: `${marginTop}mm` }}></div>
-                   <div className="absolute top-0 left-0 h-full border-r border-blue-400/30" style={{ width: `${marginLeft}mm` }}></div>
-                   <div id="printable-area" ref={barcodeRef}>
-                       <div className="grid" style={{ gridTemplateColumns: `repeat(${gridConfig.cols}, 1fr)`, columnGap: `${gapX}mm`, rowGap: '5mm' }}>
-                           {Array.from({ length: quantity }).map((_, i) => (
-                               <div key={i} className="border border-dashed border-gray-300 p-2 flex flex-col items-center justify-center text-center h-[140px] relative overflow-hidden">
-                                   {title && <div className="text-black text-[10px] font-sans mb-1 w-full overflow-hidden text-ellipsis whitespace-nowrap">{title}</div>}
-                                   {useQRCode ? <QRCode value={qrData || value} size={80} /> : <Barcode value={value} format={format as any} width={1.2} height={40} fontSize={11} displayValue={showText} margin={0} />}
-                                   <div className="flex justify-between w-full px-1 mt-1">{condition && <span className="text-black text-[9px] font-bold uppercase">{condition}</span>}{expiryDate && <span className="text-black text-[9px] font-bold">{expiryDate}</span>}</div>
-                                   {batchNumber && <div className="text-gray-400 text-[7px] mt-0.5">LOT: {batchNumber}</div>}
-                                   {supplierCode && <div className="text-gray-400 text-[7px]">{supplierCode}</div>}
-                               </div>
-                           ))}
-                       </div>
-                   </div>
-               </div>
-            </div>
-            <div className="flex justify-center mt-4 gap-6"><div className="flex items-center gap-2 text-xs text-slate-500"><FileText className="w-3 h-3" />Preview: {pageSize.toUpperCase()} Paper</div><div className="flex items-center gap-2 text-xs text-slate-500"><Move className="w-3 h-3" />Margins Active</div></div>
-          </div>
-
-        </div>
-
-        {/* --- GUIDE SECTION --- */}
-        <div className="border-t border-slate-800 pt-10">
-           <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><BookOpen className="w-6 h-6 text-indigo-500" />FBA Labelling Strategy</h2>
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800"><div className="bg-indigo-500/10 w-10 h-10 rounded-lg flex items-center justify-center mb-4"><Package className="w-5 h-5 text-indigo-400" /></div><h3 className="font-bold text-white mb-2">The Commingling Trap</h3><p className="text-sm text-slate-400 leading-relaxed"><b>Never use ASIN (B0...) on labels.</b> Amazon treats ASIN inventory as "identical". If a hijacker sends fakes, Amazon might ship their fake item to your customer. Always use FNSKU (X0...).</p></div>
-              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800"><div className="bg-emerald-500/10 w-10 h-10 rounded-lg flex items-center justify-center mb-4"><Factory className="w-5 h-5 text-emerald-400" /></div><h3 className="font-bold text-white mb-2">Supplier & Batch Codes</h3><p className="text-sm text-slate-400 leading-relaxed">Use "Supplier Code" and "Batch/Lot" fields to track inventory sources. If a customer complains about quality, you can identify the exact factory or batch that failed.</p></div>
-              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800"><div className="bg-purple-500/10 w-10 h-10 rounded-lg flex items-center justify-center mb-4"><Layers className="w-5 h-5 text-purple-400" /></div><h3 className="font-bold text-white mb-2">Batch Printing Power</h3><p className="text-sm text-slate-400 leading-relaxed">Instead of one-at-a-time, add multiple SKUs and quantities to the "Batch Printing" list. Click "Print Batch" to generate a single, correctly formatted sheet with all your labels.</p></div>
-           </div>
-        </div>
-
-        {/* --- CREATOR FOOTER START --- */}
-        <div className="mt-12 flex flex-col items-center justify-center space-y-2 border-t border-slate-800 pt-8">
-          <p className="text-slate-500 font-medium text-sm">Created by SmartRwl</p>
-          <div className="flex space-x-4">
-            {/* Instagram Icon */}
-            <a
-              href="http://www.instagram.com/smartrwl"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-600 hover:text-pink-500 transition-colors"
-              title="Instagram"
+              PDF
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={!!busy || totalLabels === 0}
+              className="flex items-center gap-2 rounded-lg bg-orange-600 px-6 py-2 text-sm font-bold text-white shadow-lg shadow-orange-900/30 transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-              </svg>
-            </a>
-
-            {/* GitHub Icon */}
-            <a
-              href="https://github.com/Smart-rwl/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-600 hover:text-white transition-colors"
-              title="GitHub"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-              </svg>
-            </a>
+              {busy === 'print' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="h-4 w-4" />
+              )}
+              Print {totalLabels > 0 ? `(${totalLabels} labels · ${totalPages} pg)` : ''}
+            </button>
           </div>
         </div>
-        {/* --- CREATOR FOOTER END --- */}
 
+        {/* Mode toggle */}
+        <div className="mb-6 flex w-fit rounded-lg border border-slate-800 bg-slate-900 p-1">
+          <ModeButton active={mode === 'fnsku'} onClick={() => setMode('fnsku')} icon={<BarcodeIcon className="h-4 w-4" />}>
+            FNSKU mode
+          </ModeButton>
+          <ModeButton active={mode === 'qr'} onClick={() => setMode('qr')} icon={<QrCode className="h-4 w-4" />}>
+            QR mode
+          </ModeButton>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          {/* LEFT — config */}
+          <div className="space-y-6 lg:col-span-5">
+            {mode === 'fnsku' ? (
+              <FnskuList
+                rows={fnskuRows}
+                issuesByRow={Object.fromEntries(fnskuIssues.map((r) => [r.id, r.issues]))}
+                onUpdate={updateFnsku}
+                onAdd={addFnsku}
+                onDuplicate={duplicateFnsku}
+                onRemove={removeFnsku}
+              />
+            ) : (
+              <QrList
+                rows={qrRows}
+                issuesByRow={Object.fromEntries(qrIssues.map((r) => [r.id, r.issues]))}
+                onUpdate={updateQr}
+                onAdd={addQr}
+                onDuplicate={duplicateQr}
+                onRemove={removeQr}
+              />
+            )}
+
+            <PaperPanel
+              pageSize={pageSize}
+              setPageSize={setPageSize}
+              gridPreset={gridPreset}
+              setGridPreset={setGridPreset}
+              marginTopMm={marginTopMm}
+              setMarginTopMm={setMarginTopMm}
+              marginLeftMm={marginLeftMm}
+              setMarginLeftMm={setMarginLeftMm}
+              gapXMm={gapXMm}
+              setGapXMm={setGapXMm}
+              gapYMm={gapYMm}
+              setGapYMm={setGapYMm}
+            />
+          </div>
+
+          {/* RIGHT — preview */}
+          <div className="lg:col-span-7">
+            <Preview
+              mode={mode}
+              fnskuRows={fnskuRows}
+              qrRows={qrRows}
+              pageSize={pageSize}
+              cols={grid.cols}
+              rows={grid.rows}
+              marginTopMm={marginTopMm}
+              marginLeftMm={marginLeftMm}
+              gapXMm={gapXMm}
+              gapYMm={gapYMm}
+              totalLabels={totalLabels}
+              totalPages={totalPages}
+            />
+          </div>
+        </div>
+
+        {/* GUIDE */}
+        <Guide />
+
+        {/* Hidden SVG renderers — one per unique symbol value */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            left: -99999,
+            top: 0,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+          }}
+        >
+          {uniqueSymbols.map((v) => (
+            <div
+              key={v}
+              ref={(el) => {
+                if (el) symbolRefs.current.set(v, el);
+                else symbolRefs.current.delete(v);
+              }}
+            >
+              {mode === 'fnsku' ? (
+                <Barcode
+                  value={v}
+                  format="CODE128"
+                  width={1.5}
+                  height={50}
+                  fontSize={11}
+                  displayValue
+                  margin={0}
+                />
+              ) : (
+                <QRCode value={v} size={120} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────
+   Sub-components
+──────────────────────────────────────────────── */
+
+function ModeButton({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
+        active
+          ? 'bg-orange-600 text-white'
+          : 'text-slate-400 hover:text-white'
+      }`}
+    >
+      {icon} {children}
+    </button>
+  );
+}
+
+function FnskuList({
+  rows,
+  issuesByRow,
+  onUpdate,
+  onAdd,
+  onDuplicate,
+  onRemove,
+}: {
+  rows: FnskuRow[];
+  issuesByRow: Record<string, Issue[]>;
+  onUpdate: <K extends keyof FnskuRow>(id: string, field: K, value: FnskuRow[K]) => void;
+  onAdd: () => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-800/50 px-5 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+          <Layers className="h-4 w-4 text-orange-400" /> Label batch
+          <span className="text-xs font-normal text-slate-500">
+            ({rows.length} SKU{rows.length === 1 ? '' : 's'})
+          </span>
+        </h3>
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-1 rounded-full bg-orange-600 px-3 py-1.5 text-xs text-white transition hover:bg-orange-500"
+        >
+          <Plus className="h-3 w-3" /> Add SKU
+        </button>
+      </div>
+
+      <div className="space-y-3 p-4">
+        {rows.map((row) => (
+          <FnskuRowEditor
+            key={row.id}
+            row={row}
+            issues={issuesByRow[row.id] ?? []}
+            canRemove={rows.length > 1}
+            onUpdate={onUpdate}
+            onDuplicate={() => onDuplicate(row.id)}
+            onRemove={() => onRemove(row.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FnskuRowEditor({
+  row,
+  issues,
+  canRemove,
+  onUpdate,
+  onDuplicate,
+  onRemove,
+}: {
+  row: FnskuRow;
+  issues: Issue[];
+  canRemove: boolean;
+  onUpdate: <K extends keyof FnskuRow>(id: string, field: K, value: FnskuRow[K]) => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+}) {
+  const hasError = issues.some((i) => i.severity === 'error');
+  return (
+    <div
+      className={`rounded-lg border bg-slate-950 p-4 transition ${
+        hasError ? 'border-red-900/50' : 'border-slate-800'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-1 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel label="FNSKU">
+              <input
+                type="text"
+                value={row.fnsku}
+                onChange={(e) => onUpdate(row.id, 'fnsku', e.target.value)}
+                placeholder="X001234567"
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 font-mono text-sm uppercase text-white outline-none focus:border-orange-500"
+                spellCheck={false}
+              />
+            </FieldLabel>
+            <FieldLabel label="Quantity">
+              <input
+                type="number"
+                min="0"
+                value={row.quantity}
+                onChange={(e) => onUpdate(row.id, 'quantity', safeNum(e.target.value))}
+                className="w-full rounded border border-orange-800 bg-orange-900/20 p-2 text-center font-mono text-sm font-bold text-white outline-none focus:border-orange-500"
+              />
+            </FieldLabel>
+          </div>
+
+          <FieldLabel label={`Title (${row.title.length}/${TITLE_MAX})`}>
+            <input
+              type="text"
+              value={row.title}
+              onChange={(e) => onUpdate(row.id, 'title', e.target.value)}
+              className={`w-full rounded border bg-slate-900 p-2 text-sm text-white outline-none focus:border-orange-500 ${
+                row.title.length > TITLE_MAX ? 'border-amber-700' : 'border-slate-700'
+              }`}
+            />
+          </FieldLabel>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel label="Condition">
+              <select
+                value={row.condition}
+                onChange={(e) => onUpdate(row.id, 'condition', e.target.value as FnskuRow['condition'])}
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white outline-none focus:border-orange-500"
+              >
+                <option>New</option>
+                <option>Used</option>
+                <option>Refurbished</option>
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Category">
+              <select
+                value={row.category}
+                onChange={(e) => onUpdate(row.id, 'category', e.target.value as CategoryKey)}
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white outline-none focus:border-orange-500"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <FieldLabel label="Expiry" icon={<CalendarClock className="h-3 w-3" />}>
+              <input
+                type="date"
+                value={row.expiryDate}
+                onChange={(e) => onUpdate(row.id, 'expiryDate', e.target.value)}
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-xs text-white outline-none focus:border-orange-500"
+              />
+            </FieldLabel>
+            <FieldLabel label="Lot / batch">
+              <input
+                type="text"
+                value={row.batchNumber}
+                onChange={(e) => onUpdate(row.id, 'batchNumber', e.target.value)}
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-xs text-white outline-none focus:border-orange-500"
+              />
+            </FieldLabel>
+            <FieldLabel label="Supplier" icon={<Factory className="h-3 w-3" />}>
+              <input
+                type="text"
+                value={row.supplierCode}
+                onChange={(e) => onUpdate(row.id, 'supplierCode', e.target.value)}
+                className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-xs text-white outline-none focus:border-orange-500"
+              />
+            </FieldLabel>
+          </div>
+
+          {issues.length > 0 && <IssueList issues={issues} />}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={onDuplicate}
+            className="rounded border border-slate-800 p-2 text-slate-400 transition hover:text-orange-400"
+            aria-label="Duplicate row"
+            title="Duplicate"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onRemove}
+            disabled={!canRemove}
+            className="rounded border border-slate-800 p-2 text-slate-400 transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Remove row"
+            title="Remove"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QrList({
+  rows,
+  issuesByRow,
+  onUpdate,
+  onAdd,
+  onDuplicate,
+  onRemove,
+}: {
+  rows: QrRow[];
+  issuesByRow: Record<string, Issue[]>;
+  onUpdate: <K extends keyof QrRow>(id: string, field: K, value: QrRow[K]) => void;
+  onAdd: () => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-800/50 px-5 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+          <QrCode className="h-4 w-4 text-orange-400" /> QR batch
+          <span className="text-xs font-normal text-slate-500">
+            ({rows.length} item{rows.length === 1 ? '' : 's'})
+          </span>
+        </h3>
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-1 rounded-full bg-orange-600 px-3 py-1.5 text-xs text-white transition hover:bg-orange-500"
+        >
+          <Plus className="h-3 w-3" /> Add QR
+        </button>
+      </div>
+
+      <div className="space-y-3 p-4">
+        {rows.map((row) => {
+          const issues = issuesByRow[row.id] ?? [];
+          const hasError = issues.some((i) => i.severity === 'error');
+          return (
+            <div
+              key={row.id}
+              className={`rounded-lg border bg-slate-950 p-4 ${
+                hasError ? 'border-red-900/50' : 'border-slate-800'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-1 space-y-3">
+                  <FieldLabel label="QR data (URL or text)">
+                    <textarea
+                      value={row.data}
+                      onChange={(e) => onUpdate(row.id, 'data', e.target.value)}
+                      rows={2}
+                      className="w-full resize-none rounded border border-slate-700 bg-slate-900 p-2 font-mono text-xs text-white outline-none focus:border-orange-500"
+                      placeholder="https://example.com/product"
+                    />
+                  </FieldLabel>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FieldLabel label="Label (optional, above QR)">
+                      <input
+                        type="text"
+                        value={row.label}
+                        onChange={(e) => onUpdate(row.id, 'label', e.target.value)}
+                        className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm text-white outline-none focus:border-orange-500"
+                      />
+                    </FieldLabel>
+                    <FieldLabel label="Quantity">
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.quantity}
+                        onChange={(e) => onUpdate(row.id, 'quantity', safeNum(e.target.value))}
+                        className="w-full rounded border border-orange-800 bg-orange-900/20 p-2 text-center font-mono text-sm font-bold text-white outline-none focus:border-orange-500"
+                      />
+                    </FieldLabel>
+                  </div>
+                  {issues.length > 0 && <IssueList issues={issues} />}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => onDuplicate(row.id)}
+                    className="rounded border border-slate-800 p-2 text-slate-400 transition hover:text-orange-400"
+                    aria-label="Duplicate"
+                    title="Duplicate"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => onRemove(row.id)}
+                    disabled={rows.length <= 1}
+                    className="rounded border border-slate-800 p-2 text-slate-400 transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Remove"
+                    title="Remove"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FieldLabel({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {icon} {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function IssueList({ issues }: { issues: Issue[] }) {
+  return (
+    <ul className="space-y-1">
+      {issues.map((iss, i) => (
+        <li
+          key={i}
+          className={`flex items-start gap-2 rounded p-2 text-[11px] ${
+            iss.severity === 'error'
+              ? 'bg-red-900/20 text-red-300'
+              : 'bg-amber-900/20 text-amber-300'
+          }`}
+        >
+          <AlertOctagon className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>{iss.message}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PaperPanel({
+  pageSize,
+  setPageSize,
+  gridPreset,
+  setGridPreset,
+  marginTopMm,
+  setMarginTopMm,
+  marginLeftMm,
+  setMarginLeftMm,
+  gapXMm,
+  setGapXMm,
+  gapYMm,
+  setGapYMm,
+}: {
+  pageSize: PageSize;
+  setPageSize: (v: PageSize) => void;
+  gridPreset: GridPresetKey;
+  setGridPreset: (v: GridPresetKey) => void;
+  marginTopMm: number;
+  setMarginTopMm: (v: number) => void;
+  marginLeftMm: number;
+  setMarginLeftMm: (v: number) => void;
+  gapXMm: number;
+  setGapXMm: (v: number) => void;
+  gapYMm: number;
+  setGapYMm: (v: number) => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+        <Move className="h-4 w-4 text-orange-400" /> Paper &amp; layout
+      </h3>
+
+      <div>
+        <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          Paper size
+        </label>
+        <div className="flex rounded-lg border border-slate-800 bg-slate-950 p-1">
+          {(['a4', 'a5', 'letter'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setPageSize(s)}
+              className={`flex-1 rounded py-1.5 text-xs font-medium uppercase ${
+                pageSize === s ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          Grid layout
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(GRID_PRESETS) as GridPresetKey[]).map((k) => (
+            <button
+              key={k}
+              onClick={() => setGridPreset(k)}
+              className={`rounded border py-2 text-xs font-medium ${
+                gridPreset === k
+                  ? 'border-orange-500 bg-orange-900/30 text-orange-300'
+                  : 'border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-600'
+              }`}
+            >
+              {GRID_PRESETS[k].label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 border-t border-slate-800 pt-4">
+        <MmInput label="Top" value={marginTopMm} onChange={setMarginTopMm} />
+        <MmInput label="Left" value={marginLeftMm} onChange={setMarginLeftMm} />
+        <MmInput label="Gap X" value={gapXMm} onChange={setGapXMm} />
+        <MmInput label="Gap Y" value={gapYMm} onChange={setGapYMm} />
+      </div>
+    </div>
+  );
+}
+
+function MmInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[10px] text-slate-500">{label} (mm)</label>
+      <input
+        type="number"
+        min="0"
+        value={value}
+        onChange={(e) => onChange(safeNum(e.target.value))}
+        className="w-full rounded border border-slate-700 bg-slate-950 p-1 text-center text-sm text-white outline-none focus:border-orange-500"
+      />
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────
+   Preview
+──────────────────────────────────────────────── */
+
+function Preview({
+  mode,
+  fnskuRows,
+  qrRows,
+  pageSize,
+  cols,
+  rows,
+  marginTopMm,
+  marginLeftMm,
+  gapXMm,
+  gapYMm,
+  totalLabels,
+  totalPages,
+}: {
+  mode: Mode;
+  fnskuRows: FnskuRow[];
+  qrRows: QrRow[];
+  pageSize: PageSize;
+  cols: number;
+  rows: number;
+  marginTopMm: number;
+  marginLeftMm: number;
+  gapXMm: number;
+  gapYMm: number;
+  totalLabels: number;
+  totalPages: number;
+}) {
+  const [pageWmm, pageHmm] = PAGE_DIMENSIONS_MM[pageSize];
+
+  // Expand into a flat list and only show the first page for preview perf
+  const labelsPerPage = cols * rows;
+  const labels =
+    mode === 'fnsku'
+      ? expandFnsku(fnskuRows).slice(0, labelsPerPage)
+      : expandQr(qrRows).slice(0, labelsPerPage);
+
+  return (
+    <div className="rounded-xl border-4 border-slate-800 bg-slate-200 p-4 shadow-inner">
+      <div className="mb-3 flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center gap-2">
+          <FileText className="h-3 w-3" />
+          {pageWmm} × {pageHmm} mm preview · showing page 1 of {totalPages}
+        </div>
+        <div>{totalLabels} labels total</div>
+      </div>
+
+      <div className="flex justify-center overflow-auto">
+        <div
+          className="relative bg-white shadow-2xl"
+          style={{
+            width: `${pageWmm}mm`,
+            minHeight: `${pageHmm}mm`,
+            padding: `${marginTopMm}mm ${marginLeftMm}mm`,
+            boxSizing: 'border-box',
+          }}
+        >
+          {labels.length === 0 ? (
+            <div className="flex h-[200mm] items-center justify-center text-sm text-slate-400">
+              Add a SKU with a non-zero quantity to see the preview.
+            </div>
+          ) : (
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                gridAutoRows: `minmax(0, 1fr)`,
+                columnGap: `${gapXMm}mm`,
+                rowGap: `${gapYMm}mm`,
+              }}
+            >
+              {labels.map((item, i) =>
+                mode === 'fnsku' ? (
+                  <FnskuLabelTile key={i} row={item as FnskuRow} />
+                ) : (
+                  <QrLabelTile key={i} row={item as QrRow} />
+                )
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FnskuLabelTile({ row }: { row: FnskuRow }) {
+  const v = row.fnsku.trim().toUpperCase();
+  return (
+    <div className="flex flex-col items-center justify-center overflow-hidden border border-dashed border-gray-300 p-1 text-center">
+      <div className="line-clamp-2 text-[7pt] leading-tight text-black">{row.title}</div>
+      {v && (
+        <div className="my-1 w-full">
+          <Barcode
+            value={v}
+            format="CODE128"
+            width={1.2}
+            height={32}
+            fontSize={9}
+            displayValue
+            margin={0}
+          />
+        </div>
+      )}
+      <div className="flex w-full justify-between text-[6pt] font-bold uppercase text-black">
+        <span>{row.condition}</span>
+        {row.expiryDate && <span>EXP {row.expiryDate}</span>}
+      </div>
+      {row.batchNumber && (
+        <div className="text-[5.5pt] text-gray-500">LOT {row.batchNumber}</div>
+      )}
+      {row.supplierCode && (
+        <div className="text-[5.5pt] text-gray-500">{row.supplierCode}</div>
+      )}
+    </div>
+  );
+}
+
+function QrLabelTile({ row }: { row: QrRow }) {
+  return (
+    <div className="flex flex-col items-center justify-center overflow-hidden border border-dashed border-gray-300 p-1 text-center">
+      {row.label && (
+        <div className="line-clamp-1 text-[7pt] leading-tight text-black">{row.label}</div>
+      )}
+      <div className="my-1 flex h-[60%] w-full items-center justify-center">
+        <div style={{ width: '70%', maxWidth: '60px' }}>
+          {row.data && <QRCode value={row.data} size={64} style={{ height: 'auto', maxWidth: '100%', width: '100%' }} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────
+   Guide + Footer
+──────────────────────────────────────────────── */
+
+function Guide() {
+  return (
+    <div className="mt-12 border-t border-slate-800 pt-10">
+      <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-white">
+        <BookOpen className="h-6 w-6 text-orange-500" />
+        FBA labelling strategy
+      </h2>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <GuideCard accent="orange" icon={<Package className="h-5 w-5 text-orange-400" />} title="The commingling trap">
+          <b>Never print ASIN (B0…) on FBA labels.</b> Amazon treats ASIN inventory as fungible — a
+          hijacker&apos;s fake could ship to your customer. Always use FNSKU (X…). The compliance
+          panel flags this live.
+        </GuideCard>
+        <GuideCard accent="emerald" icon={<Factory className="h-5 w-5 text-emerald-400" />} title="Lot &amp; supplier tracking">
+          Print batch / lot numbers and supplier codes onto labels themselves. When a quality issue
+          surfaces 6 months later, you can identify the affected production run without digging
+          through inventory records.
+        </GuideCard>
+        <GuideCard accent="slate" icon={<Settings className="h-5 w-5 text-slate-300" />} title="Save your scenarios">
+          This tool auto-saves your batch and paper settings to your browser. Configure your usual
+          30-up sheet once, come back tomorrow and your full SKU list is still there.
+        </GuideCard>
+      </div>
+    </div>
+  );
+}
+
+function GuideCard({
+  accent,
+  icon,
+  title,
+  children,
+}: {
+  accent: 'orange' | 'emerald' | 'slate';
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  const bg = {
+    orange: 'bg-orange-500/10',
+    emerald: 'bg-emerald-500/10',
+    slate: 'bg-slate-500/10',
+  }[accent];
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+      <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>{icon}</div>
+      <h3 className="mb-2 font-bold text-white">{title}</h3>
+      <p className="text-sm leading-relaxed text-slate-400">{children}</p>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <div className="mt-12 flex flex-col items-center justify-center space-y-2 border-t border-slate-800 pt-8">
+      <p className="text-sm font-medium text-slate-500">Created by SmartRwl</p>
+      <div className="flex space-x-4">
+        <a
+          href="http://www.instagram.com/smartrwl"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-600 transition-colors hover:text-pink-500"
+          title="Instagram"
+          aria-label="Instagram"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+          </svg>
+        </a>
+        <a
+          href="https://github.com/Smart-rwl/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-600 transition-colors hover:text-white"
+          title="GitHub"
+          aria-label="GitHub"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+          </svg>
+        </a>
       </div>
     </div>
   );
