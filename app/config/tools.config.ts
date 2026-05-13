@@ -41,6 +41,11 @@ import {
   // Operations
   Package,
   Crosshair,
+  Asterisk,   
+  // bullet-unicode
+  Ruler,      
+  // volume-calculator
+  Weight,
   Scale,
   Swords,
   Rocket,
@@ -319,6 +324,14 @@ export const TOOLS: readonly Tool[] = [
     icon: FlaskConical,
     keywords: ['ab test', 'split test', 'significance', 'experiment'],
   },
+  {
+  slug: 'bullet-unicode',
+  label: 'Unicode Bullets',
+  description: 'Bullet symbols and special characters for product descriptions.',
+  category: 'listing',
+  icon: Asterisk,
+  keywords: ['bullet', 'unicode', 'symbol', 'special character', 'amazon bullet'],
+},
 
   /* ── Operations ──────────────────────────── */
   {
@@ -330,6 +343,22 @@ export const TOOLS: readonly Tool[] = [
     priority: 4,
     keywords: ['inventory', 'restock', 'replenishment', 'stock', 'forecast'],
   },
+  {
+  slug: 'volume-calculator',
+  label: 'Volume Calculator',
+  description: 'Package dimensions and box volume.',
+  category: 'operations',
+  icon: Ruler,
+  keywords: ['volume', 'dimensions', 'cubic', 'package size', 'lxwxh', 'box'],
+},
+{
+  slug: 'volumetric',
+  label: 'Volumetric Weight',
+  description: 'Chargeable (dim) weight calculator for couriers and air freight.',
+  category: 'operations',
+  icon: Weight,
+  keywords: ['volumetric', 'dim weight', 'chargeable weight', 'shipping', 'courier'],
+},
   {
     slug: 'price-finder',
     label: 'Target Price Finder',
