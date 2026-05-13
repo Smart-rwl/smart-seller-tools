@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import {
   Activity,
   ArrowUpRight,
-  Bell,
   BookOpen,
   ChevronRight,
+  Crown,
+  Flame,
   Layers,
   LineChart,
   Package,
@@ -20,15 +21,18 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { TOOLS } from '../config/tools.config';
+import {
+  TOOLS,
+  TOOL_GROUPS,
+  type Tool,
+  type ToolCategory,
+} from '../config/tools.config';
 import {
   useBlogPosts,
   useDashboardUser,
   useFavorites,
   useUsageStats,
   type BlogPost,
-  type Tool,
-  type ToolCategory,
   type UsageStats,
 } from './_lib';
 
@@ -38,15 +42,14 @@ import {
 
 type CategoryFilter = ToolCategory | 'all' | 'pinned';
 
+// Built from TOOL_GROUPS so adding a category to the config
+// automatically adds it to the dashboard filter pills.
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'pinned', label: 'Pinned' },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'content', label: 'Content' },
-  { id: 'finance', label: 'Finance' },
-  { id: 'logistics', label: 'Logistics' },
-  { id: 'optimization', label: 'Optimization' },
-  { id: 'utility', label: 'Utility' },
+  ...(Object.entries(TOOL_GROUPS) as [ToolCategory, string][]).map(
+    ([id, label]) => ({ id, label })
+  ),
 ];
 
 const SERVICES = [
@@ -87,7 +90,7 @@ const CREATIVE_TIPS = [
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: userLoading, displayName, avatarUrl } = useDashboardUser();
+  const { user, loading: userLoading, displayName } = useDashboardUser();
   const userId = user?.id;
 
   const { isFavorite, toggle: toggleFavorite } = useFavorites(userId);
@@ -98,9 +101,25 @@ export default function DashboardPage() {
   const [category, setCategory] = useState<CategoryFilter>('all');
   const [launching, setLaunching] = useState<string | null>(null);
 
+  /** Pinned = user-curated favorites */
+  const pinnedTools = useMemo(
+    () => TOOLS.filter((t) => isFavorite(t.slug)),
+    [isFavorite]
+  );
+
+  /** Featured = priority-tagged in tools.config.ts, ascending */
+  const featuredTools = useMemo(
+    () =>
+      TOOLS.filter((t) => typeof t.priority === 'number').sort(
+        (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
+      ),
+    []
+  );
+
+  /** All tools (filtered + priority-aware sort) */
   const filteredTools = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (TOOLS as Tool[]).filter((t) => {
+    return TOOLS.filter((t) => {
       if (category === 'pinned' && !isFavorite(t.slug)) return false;
       if (category !== 'all' && category !== 'pinned' && t.category !== category) return false;
       if (!q) return true;
@@ -110,13 +129,12 @@ export default function DashboardPage() {
         (t.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false) ||
         t.slug.toLowerCase().includes(q)
       );
+    }).sort((a, b) => {
+      const pa = a.priority ?? 999;
+      const pb = b.priority ?? 999;
+      return pa - pb;
     });
   }, [query, category, isFavorite]);
-
-  const pinnedTools = useMemo(
-    () => (TOOLS as Tool[]).filter((t) => isFavorite(t.slug)),
-    [isFavorite]
-  );
 
   const launchTool = useCallback(
     async (slug: string) => {
@@ -127,7 +145,7 @@ export default function DashboardPage() {
     [stats, router]
   );
 
-  // ⌘K / Ctrl-K to focus search
+  // ⌘K / Ctrl-K focuses the search bar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -141,19 +159,24 @@ export default function DashboardPage() {
 
   if (userLoading || !user) return <DashboardSkeleton />;
 
-  const showPinnedSection = pinnedTools.length > 0 && category === 'all' && !query;
+  // Surface curated sections only in the default view
+  const isDefaultView = category === 'all' && !query;
+  const showPinnedSection = pinnedTools.length > 0 && isDefaultView;
+  const showFeaturedSection = featuredTools.length > 0 && isDefaultView;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#09090b] text-zinc-100">
       <DashboardStyles />
 
-      {/* Atmosphere */}
+      {/* Atmospheric backgrounds */}
       <div aria-hidden className="pointer-events-none absolute inset-0 grid-bg" />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[480px] dot-grid opacity-60" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[480px] dot-grid opacity-60"
+      />
 
-      <DashHeader displayName={displayName} avatarUrl={avatarUrl} />
-
-      <main className="relative mx-auto max-w-7xl px-6 pb-24 pt-10 lg:px-8">
+      {/* Note: top padding clears the fixed 56px Navbar */}
+      <main className="relative mx-auto max-w-7xl px-6 pb-24 pt-24 lg:px-8">
         <Greeting
           displayName={displayName}
           todayCount={stats.today}
@@ -167,7 +190,7 @@ export default function DashboardPage() {
             setQuery={setQuery}
             category={category}
             setCategory={setCategory}
-            totalTools={(TOOLS as Tool[]).length}
+            totalTools={TOOLS.length}
             pinnedCount={pinnedTools.length}
           />
         </div>
@@ -188,6 +211,20 @@ export default function DashboardPage() {
               />
             )}
 
+            {showFeaturedSection && (
+              <ToolSection
+                title="Featured"
+                icon={<Crown className="h-3 w-3" />}
+                meta={`${featuredTools.length} essentials`}
+                tools={featuredTools}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+                launching={launching}
+                onLaunch={launchTool}
+                style={{ animationDelay: '0.18s' }}
+              />
+            )}
+
             <ToolSection
               title={query ? `Results for "${query}"` : 'All tools'}
               icon={<Layers className="h-3 w-3" />}
@@ -197,7 +234,7 @@ export default function DashboardPage() {
               toggleFavorite={toggleFavorite}
               launching={launching}
               onLaunch={launchTool}
-              style={{ animationDelay: '0.2s' }}
+              style={{ animationDelay: '0.22s' }}
             />
 
             <ServicesSection style={{ animationDelay: '0.3s' }} />
@@ -211,62 +248,6 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
-  );
-}
-
-/* ────────────────────────────────────────────────
-   Header
-──────────────────────────────────────────────── */
-
-function DashHeader({
-  displayName,
-  avatarUrl,
-}: {
-  displayName: string;
-  avatarUrl: string | null;
-}) {
-  return (
-    <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8">
-        <Link href="/dashboard" className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-orange-500 to-orange-600 shadow-[0_0_20px_rgba(249,115,22,0.35)]">
-            <span className="text-xs font-bold text-white">S</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[13px] font-medium text-zinc-100">Smart Seller</span>
-            <span className="font-mono-num text-[10px] text-zinc-600">v2.0</span>
-          </div>
-        </Link>
-
-        <div className="hidden items-center gap-2 text-[11px] text-zinc-500 md:flex">
-          <span>Press</span>
-          <kbd className="font-mono-num rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-zinc-400">
-            ⌘ K
-          </kbd>
-          <span>to search</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            className="relative rounded-md p-1.5 text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-300"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-orange-500" />
-          </button>
-          <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-zinc-800">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-[11px] font-medium text-zinc-300">
-                {displayName.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </header>
   );
 }
 
@@ -287,7 +268,15 @@ function Greeting({
 }) {
   const hour = new Date().getHours();
   const phrase =
-    hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Late night grind';
+    hour < 5
+      ? 'Working late'
+      : hour < 12
+        ? 'Good morning'
+        : hour < 17
+          ? 'Good afternoon'
+          : hour < 21
+            ? 'Good evening'
+            : 'Late night grind';
 
   return (
     <div className="anim-in" style={style}>
@@ -461,6 +450,7 @@ function ToolCard({
   style?: React.CSSProperties;
 }) {
   const Icon = tool.icon ?? Zap;
+  const categoryLabel = tool.category ? TOOL_GROUPS[tool.category] : 'Tool';
 
   return (
     <button
@@ -483,7 +473,7 @@ function ToolCard({
               </span>
             )}
             {tool.isPro && (
-              <span className="rounded bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-400">
+              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400">
                 Pro
               </span>
             )}
@@ -506,7 +496,9 @@ function ToolCard({
             >
               <Star
                 className={`h-3 w-3 transition ${
-                  isFavorite ? 'fill-orange-400 text-orange-400' : 'text-zinc-600 hover:text-zinc-400'
+                  isFavorite
+                    ? 'fill-orange-400 text-orange-400'
+                    : 'text-zinc-600 hover:text-zinc-400'
                 }`}
               />
             </span>
@@ -520,7 +512,7 @@ function ToolCard({
 
         <div className="mt-3 flex items-center justify-between border-t border-white/[0.04] pt-3">
           <span className="text-[10px] uppercase tracking-wider text-zinc-600">
-            {tool.category ?? 'Tool'}
+            {categoryLabel}
           </span>
           {launching ? (
             <span className="font-mono-num text-[10px] text-orange-400">opening…</span>
@@ -580,7 +572,7 @@ function ServicesSection({ style }: { style?: React.CSSProperties }) {
 }
 
 /* ────────────────────────────────────────────────
-   Stats card — activity counter, sparkline, top tools
+   Stats card — activity, streak, sparkline, top tools
 ──────────────────────────────────────────────── */
 
 function StatsCard({
@@ -592,7 +584,17 @@ function StatsCard({
 }) {
   const max = Math.max(...stats.daily, 1);
 
-  // Build last-7-day labels ending today
+  // Day-streak: consecutive days ending today with at least 1 launch
+  const streak = useMemo(() => {
+    let count = 0;
+    for (let i = stats.daily.length - 1; i >= 0; i--) {
+      if (stats.daily[i] > 0) count++;
+      else break;
+    }
+    return count;
+  }, [stats.daily]);
+
+  // Build last-7-day labels ending today (timezone-aware via getDay)
   const labels: string[] = [];
   const today = new Date();
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -607,7 +609,10 @@ function StatsCard({
       className="anim-in relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5"
       style={style}
     >
-      <div aria-hidden className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-orange-500/10 blur-3xl" />
+      <div
+        aria-hidden
+        className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-orange-500/10 blur-3xl"
+      />
 
       <div className="relative">
         <div className="mb-5 flex items-center justify-between">
@@ -623,15 +628,33 @@ function StatsCard({
 
         <div className="mb-5 space-y-1">
           <div className="flex items-baseline gap-2">
-            <span className="font-mono-num text-4xl font-light text-zinc-100">{stats.week}</span>
+            <span className="font-mono-num text-4xl font-light text-zinc-100">
+              {stats.week}
+            </span>
             <span className="text-xs text-zinc-500">launches this week</span>
           </div>
-          <div className="text-[11px] text-zinc-600">
-            <span className="font-mono-num text-zinc-400">{stats.total}</span> all-time ·{' '}
-            <span className="font-mono-num text-zinc-400">{stats.today}</span> today
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-600">
+            <span>
+              <span className="font-mono-num text-zinc-400">{stats.total}</span> all-time
+            </span>
+            <span className="text-zinc-700">·</span>
+            <span>
+              <span className="font-mono-num text-zinc-400">{stats.today}</span> today
+            </span>
+            {streak > 1 && (
+              <>
+                <span className="text-zinc-700">·</span>
+                <span className="inline-flex items-center gap-1 text-orange-300">
+                  <Flame className="h-3 w-3 fill-orange-400/30 text-orange-400" />
+                  <span className="font-mono-num">{streak}</span>
+                  <span className="text-orange-300/70">day streak</span>
+                </span>
+              </>
+            )}
           </div>
         </div>
 
+        {/* Sparkline */}
         <div className="mb-1.5 flex h-16 items-end gap-1">
           {stats.daily.map((v, i) => {
             const isToday = i === stats.daily.length - 1;
@@ -666,7 +689,7 @@ function StatsCard({
             <p className="mb-3 text-[10px] uppercase tracking-wider text-zinc-600">Most used</p>
             <ul className="space-y-2">
               {stats.topTools.map((t, i) => {
-                const tool = (TOOLS as Tool[]).find((x) => x.slug === t.slug);
+                const tool = TOOLS.find((x) => x.slug === t.slug);
                 return (
                   <li key={t.slug} className="flex items-center justify-between text-xs">
                     <span className="flex min-w-0 items-center gap-2">
@@ -700,7 +723,10 @@ function CreativePulseCard({ style }: { style?: React.CSSProperties }) {
           'linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(249, 115, 22, 0.02))',
       }}
     >
-      <div aria-hidden className="absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-orange-500/10 blur-3xl" />
+      <div
+        aria-hidden
+        className="absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-orange-500/10 blur-3xl"
+      />
 
       <div className="relative">
         <div className="mb-3 flex items-center justify-between">
@@ -739,13 +765,19 @@ function BlogCard({
   style?: React.CSSProperties;
 }) {
   return (
-    <div className="anim-in rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5" style={style}>
+    <div
+      className="anim-in rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5"
+      style={style}
+    >
       <div className="mb-4 flex items-baseline justify-between">
         <h3 className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-zinc-500">
           <BookOpen className="h-3 w-3" />
           Insights
         </h3>
-        <Link href="/blog" className="text-[11px] text-zinc-500 transition hover:text-orange-400">
+        <Link
+          href="/blog"
+          className="text-[11px] text-zinc-500 transition hover:text-orange-400"
+        >
           All posts
         </Link>
       </div>
@@ -794,8 +826,7 @@ function BlogCard({
 function DashboardSkeleton() {
   return (
     <div className="min-h-screen bg-[#09090b]">
-      <div className="h-14 border-b border-white/[0.06]" />
-      <div className="mx-auto max-w-7xl px-6 pt-10 lg:px-8">
+      <div className="mx-auto max-w-7xl px-6 pt-24 lg:px-8">
         <div className="mb-3 h-3 w-20 animate-pulse rounded bg-white/[0.04]" />
         <div className="h-12 w-72 animate-pulse rounded bg-white/[0.04]" />
         <div className="mt-12 h-16 animate-pulse rounded-2xl bg-white/[0.04]" />
@@ -828,8 +859,6 @@ function DashboardStyles() {
 
       .font-serif { font-family: 'Instrument Serif', Georgia, serif; }
       .font-mono-num { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-
-      /* Body font applied via class on the root div if you want, or globally in layout.tsx */
 
       @keyframes fadeUp {
         from { opacity: 0; transform: translateY(8px); }

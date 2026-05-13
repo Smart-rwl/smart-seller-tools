@@ -5,33 +5,16 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import type { LucideIcon } from 'lucide-react';
 
 /* ────────────────────────────────────────────────
-   TYPES — these mirror the recommended shape for
-   your config/tools.config.ts. Existing tools with
-   only { slug, label } still work; the extras just
-   make the UI richer when present.
+   Types
+   Tool / ToolCategory live in tools.config.ts —
+   single source of truth. Re-exported here so
+   existing `import { type Tool } from './_lib'`
+   in other files keeps working.
 ──────────────────────────────────────────────── */
 
-export type ToolCategory =
-  | 'analytics'
-  | 'content'
-  | 'finance'
-  | 'logistics'
-  | 'optimization'
-  | 'utility';
-
-export type Tool = {
-  slug: string;
-  label: string;
-  description?: string;
-  category?: ToolCategory;
-  icon?: LucideIcon;
-  keywords?: string[];
-  isNew?: boolean;
-  isPro?: boolean;
-};
+export type { Tool, ToolCategory } from '@/app/config/tools.config';
 
 export type BlogPost = {
   id: string;
@@ -113,8 +96,6 @@ export function useDashboardUser() {
 
 /* ────────────────────────────────────────────────
    useFavorites — pinned tools, Supabase + localStorage
-   Optimistic UI: state updates immediately,
-   sync to DB happens in the background.
 ──────────────────────────────────────────────── */
 
 const FAVORITES_KEY = 'smartrwl:favorites:v1';
@@ -143,7 +124,6 @@ function writeLocalFavorites(set: Set<string>) {
 export function useFavorites(userId: string | undefined) {
   const [favorites, setFavorites] = useState<Set<string>>(() => readLocalFavorites());
 
-  // Hydrate from Supabase when we know the user
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -222,7 +202,6 @@ export function useUsageStats(userId: string | undefined) {
 
   const fetchStats = useCallback(async () => {
     if (!userId) {
-      // Pre-auth fallback to legacy counter
       const legacy =
         typeof window !== 'undefined'
           ? Number(localStorage.getItem(LEGACY_USAGE_KEY)) || 0
@@ -252,7 +231,7 @@ export function useUsageStats(userId: string | undefined) {
     const recent = recentRes.data ?? [];
 
     const today = startOfDay(new Date()).getTime();
-    const daily = [0, 0, 0, 0, 0, 0, 0]; // 0 = 6 days ago, 6 = today
+    const daily = [0, 0, 0, 0, 0, 0, 0];
     const slugCounts: Record<string, number> = {};
     let todayCount = 0;
 
@@ -286,7 +265,6 @@ export function useUsageStats(userId: string | undefined) {
         }
         return;
       }
-      // Fire-and-forget — don't block navigation
       void supabase
         .from('tool_usage')
         .insert({ user_id: userId, tool_slug: slug })
