@@ -1,7 +1,7 @@
 // app/login/page.tsx
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -55,7 +55,56 @@ function safeNextPath(raw: string | null): string {
   }
 }
 
+/* ────────────────────────────────────────────────
+   Default export — Suspense boundary
+   useSearchParams() can't be prerendered at build time,
+   so the inner component is deferred to a runtime render.
+──────────────────────────────────────────────── */
+
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 font-sans">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(60% 50% at 20% 0%, rgba(249,115,22,0.12) 0%, transparent 60%), radial-gradient(50% 40% at 100% 100%, rgba(139,92,246,0.08) 0%, transparent 60%)',
+        }}
+      />
+      <div className="relative flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 h-12 w-12 rounded-xl border border-orange-800/40 bg-orange-500/10" />
+            <div className="mx-auto h-6 w-32 rounded bg-slate-800" />
+            <div className="mx-auto mt-2 h-4 w-48 rounded bg-slate-900" />
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/40 backdrop-blur">
+            <div className="h-10 w-full rounded-lg bg-slate-800" />
+            <div className="my-5 h-px w-full bg-slate-800" />
+            <div className="space-y-4">
+              <div className="h-4 w-16 rounded bg-slate-800" />
+              <div className="h-10 w-full rounded-lg bg-slate-950" />
+              <div className="h-4 w-20 rounded bg-slate-800" />
+              <div className="h-10 w-full rounded-lg bg-slate-950" />
+              <div className="h-10 w-full rounded-lg bg-orange-600/50" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
