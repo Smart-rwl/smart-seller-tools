@@ -1,8 +1,8 @@
 // app/login/page.tsx
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
   ArrowRight,
@@ -29,10 +29,42 @@ type Status =
 
 type Mode = 'password' | 'magic';
 
-const REDIRECT_AFTER_LOGIN = '/dashboard';
+const DEFAULT_REDIRECT = '/dashboard';
+
+/**
+ * Validate that a `?next=` path is safe to redirect to.
+ * Must be an internal path — no protocol-relative URLs, no external origins,
+ * no backslash tricks. Anything fishy falls back to the default.
+ */
+function safeNextPath(raw: string | null): string {
+  if (!raw || typeof raw !== 'string') return DEFAULT_REDIRECT;
+  if (raw.length > 500) return DEFAULT_REDIRECT;
+  if (!raw.startsWith('/')) return DEFAULT_REDIRECT;
+  // Protocol-relative // and backslash escapes
+  if (raw.startsWith('//') || raw.startsWith('/\\')) return DEFAULT_REDIRECT;
+  try {
+    // Resolve against a dummy origin; if the URL ends up pointing elsewhere
+    // (e.g. somebody passed `/\\evil.com`), reject it.
+    const url = new URL(raw, 'http://localhost');
+    if (url.origin !== 'http://localhost') return DEFAULT_REDIRECT;
+    // Never bounce back to login itself — would loop
+    if (url.pathname === '/login') return DEFAULT_REDIRECT;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return DEFAULT_REDIRECT;
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Resolve where to send the user after a successful login.
+  // Sanitised against open-redirect attacks.
+  const nextPath = useMemo(
+    () => safeNextPath(searchParams.get('next')),
+    [searchParams]
+  );
 
   const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
@@ -54,7 +86,7 @@ export default function LoginPage() {
     const redirectIfAuthed = (session: unknown) => {
       if (!session || hasRedirectedRef.current) return;
       hasRedirectedRef.current = true;
-      router.replace(REDIRECT_AFTER_LOGIN);
+      router.replace(nextPath);
       router.refresh();
     };
 
@@ -71,7 +103,7 @@ export default function LoginPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, nextPath]);
 
   /* ── Helpers ── */
 
@@ -127,7 +159,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
       },
     });
 
@@ -136,7 +168,7 @@ export default function LoginPage() {
       return;
     }
     setInfo(`Check ${email.trim()} for a sign-in link.`);
-  }, [email, isSubmitting]);
+  }, [email, isSubmitting, nextPath]);
 
   const handleGoogleLogin = useCallback(async () => {
     if (isSubmitting) return;
@@ -145,7 +177,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
       },
     });
 
@@ -153,7 +185,7 @@ export default function LoginPage() {
       setError(humanizeAuthError(error.message));
     }
     // On success the browser navigates away to Google, so no reset needed.
-  }, [isSubmitting]);
+  }, [isSubmitting, nextPath]);
 
   const handleForgotPassword = useCallback(async () => {
     if (isSubmitting) return;
