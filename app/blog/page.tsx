@@ -6,11 +6,11 @@ import type { Metadata } from 'next';
 import { getAllPosts } from './_data/posts';
 
 export const metadata: Metadata = {
-  title: 'Seller Academy & Blog | Smart Seller Tools',
+  title: 'Seller Academy & Blog | Seller Hands',
   description:
     "Learn how to grow your e-commerce business on Amazon, Flipkart, and Meesho with expert guides from sellers who've actually done it.",
   openGraph: {
-    title: 'Seller Academy & Blog | Smart Seller Tools',
+    title: 'Seller Academy & Blog | Seller Hands',
     description:
       'Expert advice on account management, SEO, and scaling your brand across India\'s biggest marketplaces.',
     type: 'website',
