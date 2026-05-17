@@ -576,8 +576,10 @@ export default function BarcodeGenerator() {
         return;
       }
 
-      // Build all pages into a single HTML doc (CSS handles pagination via page-break)
-      const labels =
+      // Build all pages into a single HTML doc (CSS handles pagination via page-break).
+      // Note: explicit union-element type so `chunk` infers a single T and casts
+      // back to FnskuRow[] / QrRow[] inside the mode branches stay valid.
+      const labels: (FnskuRow | QrRow)[] =
         mode === 'fnsku' ? expandFnsku(fnskuRows) : expandQr(qrRows);
 
       const labelsPerPage = grid.cols * grid.rows;
@@ -646,7 +648,7 @@ ${styleBlock}
         orientation: 'portrait',
       });
 
-      const labels =
+      const labels: (FnskuRow | QrRow)[] =
         mode === 'fnsku' ? expandFnsku(fnskuRows) : expandQr(qrRows);
       const labelsPerPage = grid.cols * grid.rows;
       const pages = chunk(labels, labelsPerPage);
@@ -1392,9 +1394,10 @@ function Preview({
 }) {
   const [pageWmm, pageHmm] = PAGE_DIMENSIONS_MM[pageSize];
 
-  // Expand into a flat list and only show the first page for preview perf
+  // Expand into a flat list and only show the first page for preview perf.
+  // Union-element type lets the cast inside the map callback stay valid.
   const labelsPerPage = cols * rows;
-  const labels =
+  const labels: (FnskuRow | QrRow)[] =
     mode === 'fnsku'
       ? expandFnsku(fnskuRows).slice(0, labelsPerPage)
       : expandQr(qrRows).slice(0, labelsPerPage);
