@@ -297,7 +297,7 @@ function LoginPageInner() {
             </div>
             <h1 className="text-2xl font-bold text-white">Welcome back</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Sign in to your SmartRwl account.
+              Sign in to your Smart Seller account.
             </p>
           </div>
 
