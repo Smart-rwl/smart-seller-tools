@@ -39,7 +39,7 @@
     "react-barcode": "^1.6.1",
     "react-dom": "^19.2.6",
     "react-qr-code": "^2.0.21",
-    "recharts": "^3.5.1"
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
