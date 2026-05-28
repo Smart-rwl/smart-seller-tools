@@ -108,15 +108,69 @@ async function pool<T, R>(items: T[], limit: number, mapper: (item: T, i: number
 ───────────────────────────────────────────── */
 
 /**
+ * Walk forward from an opening `[` and find its matching `]`, ignoring
+ * brackets inside string literals. Required because gallery entries contain
+ * nested arrays like `"main":{"...":[1500,1500]}` that broke non-greedy regex.
+ */
+function bracketMatchArray(text: string, openBracketIdx: number): string | null {
+  if (text[openBracketIdx] !== '[') return null;
+  let depth = 0;
+  let inString = false;
+  let stringChar = '';
+  let escape = false;
+  for (let i = openBracketIdx; i < text.length; i++) {
+    const c = text[i];
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === stringChar) { inString = false; }
+      continue;
+    }
+    if (c === '"' || c === "'") { inString = true; stringChar = c; continue; }
+    if (c === '[') { depth++; continue; }
+    if (c === ']') {
+      depth--;
+      if (depth === 0) return text.substring(openBracketIdx, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Locate the `colorImages.initial` array text — the gallery for the
+ * currently-selected product variation only. Scoping to `initial` excludes
+ * sibling keys like `colorImages.BLACK`, which would otherwise leak in as
+ * swatch/variation images.
+ */
+function findColorImagesInitial(html: string): string | null {
+  const colorMatch = html.match(/['"]colorImages['"]\s*:/);
+  if (!colorMatch || colorMatch.index === undefined) return null;
+  const initialRe = /['"]initial['"]\s*:\s*\[/g;
+  initialRe.lastIndex = colorMatch.index;
+  const initialMatch = initialRe.exec(html);
+  if (!initialMatch) return null;
+  const bracketIdx = initialMatch.index + initialMatch[0].length - 1;
+  return bracketMatchArray(html, bracketIdx);
+}
+
+/** Locate `imageGalleryData` array (alternative PDP layout). */
+function findImageGalleryData(html: string): string | null {
+  const m = html.match(/['"]imageGalleryData['"]\s*:\s*\[/);
+  if (!m || m.index === undefined) return null;
+  const bracketIdx = m.index + m[0].length - 1;
+  return bracketMatchArray(html, bracketIdx);
+}
+
+/**
  * Extract product images from PDP HTML.
  *
- * Strategy (in order, until we have results):
- *   1. Global scan for `"hiRes":"url"` and `"large":"url"` in document order.
- *      Dedupe by image ID. This catches all gallery entries cleanly even when
- *      the colorImages JSON has nested arrays that broke bracket-matching before.
- *   2. landingImage data-old-hires (single main image fallback)
- *   3. landingImage data-a-dynamic-image (JSON of sizes — pick largest)
- *   4. altImages thumbnail list (low-res URLs, stripped to hi-res)
+ * Strategy order:
+ *   1. colorImages.initial array — current variation's gallery ONLY
+ *      (excludes sibling color variations that appear as swatches)
+ *   2. imageGalleryData array — alt layout, also variation-scoped
+ *   3. landingImage data-old-hires — single main image fallback
+ *   4. data-a-dynamic-image — JSON of sizes, pick largest
+ *   5. altImages thumbnails — supplemental, already DOM-scoped per variation
  */
 function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: boolean): ExtractedImage[] {
   const found: ExtractedImage[] = [];
@@ -124,7 +178,6 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
 
   const pushUrl = (rawUrl: string) => {
     if (!rawUrl) return;
-    // Unescape JSON-style escapes that occasionally appear inline
     const unescaped = rawUrl
       .replace(/\\\//g, '/')
       .replace(/\\u002F/gi, '/')
@@ -142,24 +195,36 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     found.push({ url: cleaned, variant, ext });
   };
 
-  // Strategy 1: global scan for hiRes/large URLs (preserves document order)
-  const galleryRe = /["'](?:hiRes|large)["']\s*:\s*["'](https?:[^"']+)["']/g;
-  let m: RegExpExecArray | null;
-  while ((m = galleryRe.exec(html)) !== null) pushUrl(m[1]);
+  // Strategy 1: colorImages.initial (variation-scoped)
+  const initialArr = findColorImagesInitial(html);
+  if (initialArr) {
+    const re = /["'](?:hiRes|large)["']\s*:\s*["'](https?:[^"']+)["']/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(initialArr)) !== null) pushUrl(m[1]);
+  }
 
-  // Strategy 2: landingImage data-old-hires fallback
+  // Strategy 2: imageGalleryData (variation-scoped)
+  if (found.length === 0) {
+    const galleryArr = findImageGalleryData(html);
+    if (galleryArr) {
+      const re = /["'](?:hiRes|large|mainUrl)["']\s*:\s*["'](https?:[^"']+)["']/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(galleryArr)) !== null) pushUrl(m[1]);
+    }
+  }
+
+  // Strategy 3: landingImage data-old-hires fallback
   if (found.length === 0) {
     const main = html.match(/id=["']landingImage["'][^>]*data-old-hires=["']([^"']+)["']/i);
     if (main) pushUrl(main[1]);
   }
 
-  // Strategy 3: data-a-dynamic-image JSON attribute → pick largest size
+  // Strategy 4: data-a-dynamic-image — pick largest
   if (found.length === 0) {
     const dyn = html.match(/id=["']landingImage["'][^>]*data-a-dynamic-image=["']([^"']+)["']/i);
     if (dyn) {
       const raw = dyn[1].replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
       const urls = Array.from(raw.matchAll(/https?:\/\/[^"\s,\]]+/g)).map((x) => x[0]);
-      // Pick largest by _SLxxxx_ size annotation if present
       const sized = urls
         .map((u) => {
           const sz = u.match(/_SL(\d+)_|_SX(\d+)_|_SY(\d+)_/);
@@ -171,7 +236,7 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     }
   }
 
-  // Strategy 4: altImages thumbnail list (last resort — strip size suffix on each)
+  // Strategy 5: altImages thumbnails (DOM-scoped per variation)
   if (found.length < 2 && includeVariants) {
     const altSection = html.match(/id=["']altImages["'][\s\S]*?<\/ul>/i);
     if (altSection) {
