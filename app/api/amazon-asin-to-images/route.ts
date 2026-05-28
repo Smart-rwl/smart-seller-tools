@@ -162,6 +162,60 @@ function findImageGalleryData(html: string): string | null {
 }
 
 /**
+ * Split a JSON array string `[{...},{...}]` into its top-level object entries,
+ * using string-aware brace counting so braces inside string values don't break splits.
+ */
+function splitArrayEntries(arrayText: string): string[] {
+  const entries: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let stringChar = '';
+  let escape = false;
+  let entryStart = -1;
+
+  for (let i = 0; i < arrayText.length; i++) {
+    const c = arrayText[i];
+    if (escape) { escape = false; continue; }
+    if (inString) {
+      if (c === '\\') { escape = true; continue; }
+      if (c === stringChar) { inString = false; }
+      continue;
+    }
+    if (c === '"' || c === "'") { inString = true; stringChar = c; continue; }
+    if (c === '{') {
+      if (depth === 0) entryStart = i;
+      depth++;
+    } else if (c === '}') {
+      depth--;
+      if (depth === 0 && entryStart >= 0) {
+        entries.push(arrayText.substring(entryStart, i + 1));
+        entryStart = -1;
+      }
+    }
+  }
+  return entries;
+}
+
+/**
+ * From a gallery array string, return ONE URL per entry — preferring the
+ * first available field in `preferredFields`. This guarantees we never pull
+ * both the hiRes (e.g. 2000x2000) and the large (e.g. 500x500) versions of
+ * the same gallery slot, which can happen when Amazon assigns them different
+ * image IDs (in which case ID-based dedup would not catch them).
+ */
+function pickOneUrlPerEntry(arrayText: string, preferredFields: string[]): string[] {
+  const urls: string[] = [];
+  for (const entry of splitArrayEntries(arrayText)) {
+    for (const field of preferredFields) {
+      const re = new RegExp(`["']${field}["']\\s*:\\s*["'](https?:[^"']+)["']`);
+      const m = entry.match(re);
+      if (m) { urls.push(m[1]); break; }
+    }
+  }
+  return urls;
+}
+
+/**
  * Extract product images from PDP HTML.
  *
  * Strategy order:
@@ -195,21 +249,23 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     found.push({ url: cleaned, variant, ext });
   };
 
-  // Strategy 1: colorImages.initial (variation-scoped)
+  // Strategy 1: colorImages.initial — ONE URL per gallery entry (hiRes preferred).
+  // Prevents pulling both 500x500 and 2000x2000 of the same slot when their
+  // image IDs differ (in which case ID dedup alone wouldn't catch them).
   const initialArr = findColorImagesInitial(html);
   if (initialArr) {
-    const re = /["'](?:hiRes|large)["']\s*:\s*["'](https?:[^"']+)["']/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(initialArr)) !== null) pushUrl(m[1]);
+    for (const url of pickOneUrlPerEntry(initialArr, ['hiRes', 'large'])) {
+      pushUrl(url);
+    }
   }
 
-  // Strategy 2: imageGalleryData (variation-scoped)
+  // Strategy 2: imageGalleryData — ONE URL per entry
   if (found.length === 0) {
     const galleryArr = findImageGalleryData(html);
     if (galleryArr) {
-      const re = /["'](?:hiRes|large|mainUrl)["']\s*:\s*["'](https?:[^"']+)["']/g;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(galleryArr)) !== null) pushUrl(m[1]);
+      for (const url of pickOneUrlPerEntry(galleryArr, ['mainUrl', 'hiRes', 'large'])) {
+        pushUrl(url);
+      }
     }
   }
 
