@@ -24,7 +24,7 @@
     "@types/archiver": "^7.0.0",
     "@yudiel/react-qr-scanner": "^2.6.0",
     "archiver": "^8.0.0",
-    "fflate": "^0.8.2",
+    "fflate": "^0.8.3",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
