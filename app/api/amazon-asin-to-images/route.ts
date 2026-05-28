@@ -361,17 +361,17 @@ export async function POST(req: Request) {
   }
 
   /* ── Generate ZIP ── */
-  const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 
-  return new NextResponse(buffer, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="amazon-${marketplace}-images.zip"`,
-      'X-Image-Count': String(okCount),
-      'X-Error-Count': String(failCount + (failures.length - failCount)),
-      'X-Asin-Count': String(cleanAsins.length),
-      'Cache-Control': 'no-store',
-    },
-  });
+return new NextResponse(blob, {
+  status: 200,
+  headers: {
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="amazon-${marketplace}-images.zip"`,
+    'X-Image-Count': String(okCount),
+    'X-Error-Count': String(failCount + (failures.length - failCount)),
+    'X-Asin-Count': String(cleanAsins.length),
+    'Cache-Control': 'no-store',
+  },
+});
 }
