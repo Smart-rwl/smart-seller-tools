@@ -3,23 +3,23 @@ import { NextResponse } from 'next/server';
 import JSZip from 'jszip';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // seconds — bump on Vercel Pro if needed
+export const maxDuration = 60;
 
 /* ─────────────────────────────────────────────
    CONFIG
 ───────────────────────────────────────────── */
-const MAX_ASINS_PER_REQUEST = 25;          // free-tier cap
-const FETCH_CONCURRENCY     = 3;           // PDPs in flight
-const IMAGE_CONCURRENCY     = 8;           // images in flight
+const MAX_ASINS_PER_REQUEST = 25;
+const FETCH_CONCURRENCY     = 3;
+const IMAGE_CONCURRENCY     = 8;
 const PDP_TIMEOUT_MS        = 15_000;
 const IMG_TIMEOUT_MS        = 20_000;
 const ASIN_REGEX            = /^[A-Z0-9]{10}$/;
 
 const ALLOWED_TLDS = new Set([
-  'com', 'ca', 'com.mx',
+  'com', 'ca', 'com.mx', 'com.br',
   'co.uk', 'de', 'fr', 'it', 'es', 'nl', 'se', 'pl',
   'in', 'co.jp', 'sg', 'com.au',
-  'ae', 'sa', 'eg', 'com.tr', 'com.br',
+  'ae', 'sa', 'eg', 'com.tr',
 ]);
 
 const USER_AGENTS = [
@@ -46,8 +46,8 @@ interface RequestBody {
 
 interface ExtractedImage {
   url: string;
-  variant: string;          // 'MAIN' | 'PT01' | 'PT02' …
-  ext: string;              // 'jpg' | 'png' | 'webp'
+  variant: string;
+  ext: string;
 }
 
 interface AsinResult {
@@ -60,27 +60,26 @@ interface AsinResult {
    HELPERS
 ───────────────────────────────────────────── */
 
-/** Build a hi-res Amazon image URL from an image ID. */
-function buildImageUrl(id: string, ext = 'jpg', hiRes = true): string {
-  // Amazon images live on m.media-amazon.com/images/I/{id}[._SLxxxx_].{ext}
-  // To get max-res, we strip all size modifiers (anything between dots before the extension).
-  const cleanId = hiRes ? id.replace(/\._[A-Z]{2}\d+_/g, '').replace(/\.[A-Z0-9_]+_/g, '') : id;
-  return `https://m.media-amazon.com/images/I/${cleanId}.${ext}`;
-}
-
-/** Strip Amazon size suffix from a full image URL to get max-res. */
+/**
+ * Strip ALL Amazon size/crop modifiers from a CDN URL to get the original.
+ * Captures everything between the image ID and the file extension and removes it.
+ * Handles arbitrary modifier complexity: ._SL1500_, ._AC_SX466_SR300,300_, etc.
+ */
 function toHiRes(url: string): string {
-  // Match /I/{id}._SL1500_.jpg, /I/{id}._AC_SX466_.jpg, etc.
   return url.replace(
-    /\/images\/I\/([^.]+)(\._[A-Z0-9,_]+_)+\.(jpg|jpeg|png|webp)/i,
-    '/images/I/$1.$3',
+    /(\/images\/I\/[A-Za-z0-9+\-_%]+)\.[^/]*?\.(jpg|jpeg|png|webp)(\?|$)/i,
+    '$1.$2$3',
   );
 }
 
-/** Sleep helper for jittered backoff. */
+/** Extract the Amazon image ID from a CDN URL (used for deduping). */
+function idFromUrl(url: string): string | null {
+  const m = url.match(/\/images\/I\/([A-Za-z0-9+\-_%]+?)(?:[._]|\?|$)/);
+  return m ? m[1] : null;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Fetch with timeout + abort. */
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -91,7 +90,6 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-/** Run an async mapper with a concurrency cap. */
 async function pool<T, R>(items: T[], limit: number, mapper: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let cursor = 0;
@@ -106,81 +104,92 @@ async function pool<T, R>(items: T[], limit: number, mapper: (item: T, i: number
 }
 
 /* ─────────────────────────────────────────────
-   PDP SCRAPING
+   PDP IMAGE EXTRACTION
 ───────────────────────────────────────────── */
 
 /**
- * Extract image IDs from Amazon PDP HTML. Amazon embeds gallery data in
- * inline scripts as `colorImages`, `imageGalleryData`, or `'imageBlockATF'`.
- * We try multiple patterns to be resilient to A/B tests and layout changes.
+ * Extract product images from PDP HTML.
+ *
+ * Strategy (in order, until we have results):
+ *   1. Global scan for `"hiRes":"url"` and `"large":"url"` in document order.
+ *      Dedupe by image ID. This catches all gallery entries cleanly even when
+ *      the colorImages JSON has nested arrays that broke bracket-matching before.
+ *   2. landingImage data-old-hires (single main image fallback)
+ *   3. landingImage data-a-dynamic-image (JSON of sizes — pick largest)
+ *   4. altImages thumbnail list (low-res URLs, stripped to hi-res)
  */
 function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: boolean): ExtractedImage[] {
   const found: ExtractedImage[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
-  const pushUrl = (rawUrl: string, idx: number) => {
-    if (!rawUrl || !rawUrl.includes('media-amazon.com/images/I/')) return;
-    const url = hiRes ? toHiRes(rawUrl) : rawUrl;
-    if (seen.has(url)) return;
-    seen.add(url);
-    const extMatch = url.match(/\.(jpg|jpeg|png|webp)(?:\?|$)/i);
+  const pushUrl = (rawUrl: string) => {
+    if (!rawUrl) return;
+    // Unescape JSON-style escapes that occasionally appear inline
+    const unescaped = rawUrl
+      .replace(/\\\//g, '/')
+      .replace(/\\u002F/gi, '/')
+      .replace(/&amp;/g, '&');
+    if (!unescaped.includes('media-amazon.com/images/I/') &&
+        !unescaped.includes('ssl-images-amazon.com/images/I/')) return;
+    const id = idFromUrl(unescaped);
+    if (!id) return;
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
+    const cleaned = hiRes ? toHiRes(unescaped) : unescaped;
+    const extMatch = cleaned.match(/\.(jpg|jpeg|png|webp)(?:\?|$)/i);
     const ext = (extMatch?.[1] || 'jpg').toLowerCase();
-    const variant = idx === 0 ? 'MAIN' : `PT${String(idx).padStart(2, '0')}`;
-    found.push({ url, variant, ext });
+    const variant = found.length === 0 ? 'MAIN' : `PT${String(found.length).padStart(2, '0')}`;
+    found.push({ url: cleaned, variant, ext });
   };
 
-  // Strategy 1: colorImages.initial = [...]  (most common)
-  // Captures `{ "hiRes": "...", "large": "...", "thumb": "..." }` blocks
-  const colorImagesMatch = html.match(/['"]colorImages['"]\s*:\s*\{[^}]*['"]initial['"]\s*:\s*(\[[\s\S]*?\])\s*[,}]/);
-  if (colorImagesMatch) {
-    try {
-      // Loose extraction — pick out hiRes/large URLs without strict JSON parse
-      const block = colorImagesMatch[1];
-      const urlRe = /['"](?:hiRes|large)['"]\s*:\s*['"](https?:\/\/[^'"]+)['"]/g;
-      let m: RegExpExecArray | null;
-      let idx = 0;
-      while ((m = urlRe.exec(block)) !== null) {
-        pushUrl(m[1], idx);
-        // colorImages entries alternate hiRes/large — only count each entry once
-        if (m[0].includes('hiRes')) idx++;
-      }
-    } catch { /* fall through */ }
+  // Strategy 1: global scan for hiRes/large URLs (preserves document order)
+  const galleryRe = /["'](?:hiRes|large)["']\s*:\s*["'](https?:[^"']+)["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = galleryRe.exec(html)) !== null) pushUrl(m[1]);
+
+  // Strategy 2: landingImage data-old-hires fallback
+  if (found.length === 0) {
+    const main = html.match(/id=["']landingImage["'][^>]*data-old-hires=["']([^"']+)["']/i);
+    if (main) pushUrl(main[1]);
   }
 
-  // Strategy 2: imageGalleryData
+  // Strategy 3: data-a-dynamic-image JSON attribute → pick largest size
   if (found.length === 0) {
-    const galleryMatch = html.match(/['"]imageGalleryData['"]\s*:\s*(\[[\s\S]*?\])\s*[,}]/);
-    if (galleryMatch) {
-      const urlRe = /['"](?:mainUrl|hiRes|large)['"]\s*:\s*['"](https?:\/\/[^'"]+)['"]/g;
-      let m: RegExpExecArray | null;
-      let idx = 0;
-      while ((m = urlRe.exec(galleryMatch[1])) !== null) {
-        pushUrl(m[1], idx);
-        idx++;
-      }
+    const dyn = html.match(/id=["']landingImage["'][^>]*data-a-dynamic-image=["']([^"']+)["']/i);
+    if (dyn) {
+      const raw = dyn[1].replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
+      const urls = Array.from(raw.matchAll(/https?:\/\/[^"\s,\]]+/g)).map((x) => x[0]);
+      // Pick largest by _SLxxxx_ size annotation if present
+      const sized = urls
+        .map((u) => {
+          const sz = u.match(/_SL(\d+)_|_SX(\d+)_|_SY(\d+)_/);
+          const n = sz ? parseInt(sz[1] || sz[2] || sz[3] || '0', 10) : 0;
+          return { url: u, size: n };
+        })
+        .sort((a, b) => b.size - a.size);
+      if (sized.length > 0) pushUrl(sized[0].url);
     }
   }
 
-  // Strategy 3: landingImage data-old-hires fallback (single main image)
-  if (found.length === 0) {
-    const mainMatch =
-      html.match(/id=["']landingImage["'][^>]*data-old-hires=["']([^"']+)["']/i) ||
-      html.match(/id=["']landingImage["'][^>]*data-a-dynamic-image=["']([^"']+)["']/i);
-    if (mainMatch) {
-      const raw = mainMatch[1].replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
-      const urlMatch = raw.match(/https?:\/\/[^"\s]+/);
-      if (urlMatch) pushUrl(urlMatch[0], 0);
+  // Strategy 4: altImages thumbnail list (last resort — strip size suffix on each)
+  if (found.length < 2 && includeVariants) {
+    const altSection = html.match(/id=["']altImages["'][\s\S]*?<\/ul>/i);
+    if (altSection) {
+      const imgUrls = Array.from(altSection[0].matchAll(
+        /src=["'](https?:\/\/[^"']*(?:media-amazon|ssl-images-amazon)\.com\/images\/I\/[^"']+)["']/gi,
+      ));
+      for (const im of imgUrls) pushUrl(im[1]);
     }
   }
 
   if (!includeVariants && found.length > 0) {
-    return [found[0]]; // MAIN only
+    return [found[0]];
   }
 
   return found;
 }
 
-/** Fetch a single PDP and extract images. Retries once on 503. */
+/** Fetch a single PDP and extract images. Retries once on 503/429. */
 async function fetchPdpImages(
   asin: string,
   tld: string,
@@ -211,15 +220,14 @@ async function fetchPdpImages(
       const res = await fetchWithTimeout(url, { headers, redirect: 'follow' }, PDP_TIMEOUT_MS);
       if (res.status === 404) throw new Error('ASIN not found (404)');
       if (res.status === 503 || res.status === 429) {
-        // Amazon throttling — back off and retry once
         attempt++;
         await sleep(800 + Math.random() * 1200);
         continue;
       }
       if (!res.ok) throw new Error(`PDP HTTP ${res.status}`);
       const html = await res.text();
-      if (html.includes('captcha') && html.length < 20_000) {
-        throw new Error('Blocked by Amazon CAPTCHA');
+      if (html.toLowerCase().includes('api-services-support@amazon.com') && html.length < 30_000) {
+        throw new Error('Blocked by Amazon CAPTCHA / robot check');
       }
       const images = extractImagesFromHtml(html, hiRes, includeVariants);
       if (images.length === 0) throw new Error('No images found in PDP');
@@ -270,7 +278,6 @@ export async function POST(req: Request) {
   const hiRes           = options?.hiRes ?? true;
   const maxPerAsin      = Math.max(1, Math.min(20, options?.maxPerAsin ?? 20));
 
-  /* ── Validate ── */
   if (!Array.isArray(asins) || asins.length === 0) {
     return NextResponse.json({ error: 'Provide at least one ASIN' }, { status: 400 });
   }
@@ -291,7 +298,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid ASINs in request' }, { status: 400 });
   }
 
-  /* ── Fetch all PDPs (throttled) ── */
   const results: AsinResult[] = await pool(cleanAsins, FETCH_CONCURRENCY, async (asin) => {
     try {
       let images = await fetchPdpImages(asin, marketplace, locale, hiRes, includeVariants);
@@ -302,7 +308,6 @@ export async function POST(req: Request) {
     }
   });
 
-  /* ── Build flat list of image downloads ── */
   type Task = { asin: string; img: ExtractedImage };
   const tasks: Task[] = [];
   for (const r of results) for (const img of r.images) tasks.push({ asin: r.asin, img });
@@ -314,7 +319,6 @@ export async function POST(req: Request) {
     );
   }
 
-  /* ── Download images (throttled) ── */
   const zip = new JSZip();
   let okCount = 0;
   let failCount = 0;
@@ -335,12 +339,10 @@ export async function POST(req: Request) {
     manifest[asin].push({ variant: img.variant, filename, url: img.url });
   });
 
-  /* ── Note ASINs with no images at all ── */
   for (const r of results) {
     if (r.error) failures.push({ asin: r.asin, url: '', reason: r.error });
   }
 
-  /* ── Manifest + error report ── */
   zip.file('manifest.json', JSON.stringify({
     generatedAt: new Date().toISOString(),
     marketplace: `amazon.${marketplace}`,
@@ -360,18 +362,21 @@ export async function POST(req: Request) {
     zip.file('error-report.txt', txt);
   }
 
-  /* ── Generate ZIP ── */
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
 
-return new NextResponse(blob, {
-  status: 200,
-  headers: {
-    'Content-Type': 'application/zip',
-    'Content-Disposition': `attachment; filename="amazon-${marketplace}-images.zip"`,
-    'X-Image-Count': String(okCount),
-    'X-Error-Count': String(failCount + (failures.length - failCount)),
-    'X-Asin-Count': String(cleanAsins.length),
-    'Cache-Control': 'no-store',
-  },
-});
+  return new NextResponse(blob, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="amazon-${marketplace}-images.zip"`,
+      'X-Image-Count': String(okCount),
+      'X-Error-Count': String(failures.length),
+      'X-Asin-Count': String(cleanAsins.length),
+      'Cache-Control': 'no-store',
+    },
+  });
 }

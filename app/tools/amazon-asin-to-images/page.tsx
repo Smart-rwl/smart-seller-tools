@@ -13,14 +13,12 @@ import {
   Archive,
   X,
   ChevronRight,
-  ChevronDown,
   Image as ImageIcon,
   Layers,
   Clock,
   Shield,
   Globe,
   Settings2,
-  Search,
   Hash,
 } from 'lucide-react';
 import ToolWorkspace from '@/app/components/ToolWorkspace';
@@ -28,11 +26,13 @@ import ToolWorkspace from '@/app/components/ToolWorkspace';
 /* ─────────────────────────────────────────────
    TYPES
 ───────────────────────────────────────────── */
+type Region = 'Americas' | 'Europe' | 'Asia-Pac' | 'MENA';
+
 interface Marketplace {
   tld: string;
   flag: string;
   name: string;
-  region: 'North America' | 'Europe' | 'Asia / Pacific' | 'MENA / LATAM';
+  region: Region;
   locale: string;
 }
 
@@ -46,32 +46,33 @@ interface ParsedAsins {
    MARKETPLACES
 ───────────────────────────────────────────── */
 const MARKETPLACES: Marketplace[] = [
-  // North America
-  { tld: 'com',     flag: '🇺🇸', name: 'United States',   region: 'North America', locale: 'en-US' },
-  { tld: 'ca',      flag: '🇨🇦', name: 'Canada',          region: 'North America', locale: 'en-CA' },
-  { tld: 'com.mx',  flag: '🇲🇽', name: 'Mexico',          region: 'North America', locale: 'es-MX' },
+  // Americas
+  { tld: 'com',     flag: '🇺🇸', name: 'United States',   region: 'Americas', locale: 'en-US' },
+  { tld: 'ca',      flag: '🇨🇦', name: 'Canada',          region: 'Americas', locale: 'en-CA' },
+  { tld: 'com.mx',  flag: '🇲🇽', name: 'Mexico',          region: 'Americas', locale: 'es-MX' },
+  { tld: 'com.br',  flag: '🇧🇷', name: 'Brazil',          region: 'Americas', locale: 'pt-BR' },
   // Europe
-  { tld: 'co.uk',   flag: '🇬🇧', name: 'United Kingdom',  region: 'Europe',        locale: 'en-GB' },
-  { tld: 'de',      flag: '🇩🇪', name: 'Germany',         region: 'Europe',        locale: 'de-DE' },
-  { tld: 'fr',      flag: '🇫🇷', name: 'France',          region: 'Europe',        locale: 'fr-FR' },
-  { tld: 'it',      flag: '🇮🇹', name: 'Italy',           region: 'Europe',        locale: 'it-IT' },
-  { tld: 'es',      flag: '🇪🇸', name: 'Spain',           region: 'Europe',        locale: 'es-ES' },
-  { tld: 'nl',      flag: '🇳🇱', name: 'Netherlands',     region: 'Europe',        locale: 'nl-NL' },
-  { tld: 'se',      flag: '🇸🇪', name: 'Sweden',          region: 'Europe',        locale: 'sv-SE' },
-  { tld: 'pl',      flag: '🇵🇱', name: 'Poland',          region: 'Europe',        locale: 'pl-PL' },
-  // Asia / Pacific
-  { tld: 'in',      flag: '🇮🇳', name: 'India',           region: 'Asia / Pacific', locale: 'en-IN' },
-  { tld: 'co.jp',   flag: '🇯🇵', name: 'Japan',           region: 'Asia / Pacific', locale: 'ja-JP' },
-  { tld: 'sg',      flag: '🇸🇬', name: 'Singapore',       region: 'Asia / Pacific', locale: 'en-SG' },
-  { tld: 'com.au',  flag: '🇦🇺', name: 'Australia',       region: 'Asia / Pacific', locale: 'en-AU' },
-  // MENA / LATAM
-  { tld: 'ae',      flag: '🇦🇪', name: 'UAE',             region: 'MENA / LATAM',  locale: 'en-AE' },
-  { tld: 'sa',      flag: '🇸🇦', name: 'Saudi Arabia',    region: 'MENA / LATAM',  locale: 'ar-SA' },
-  { tld: 'eg',      flag: '🇪🇬', name: 'Egypt',           region: 'MENA / LATAM',  locale: 'ar-EG' },
-  { tld: 'com.tr',  flag: '🇹🇷', name: 'Turkey',          region: 'MENA / LATAM',  locale: 'tr-TR' },
-  { tld: 'com.br',  flag: '🇧🇷', name: 'Brazil',          region: 'MENA / LATAM',  locale: 'pt-BR' },
+  { tld: 'co.uk',   flag: '🇬🇧', name: 'United Kingdom',  region: 'Europe',   locale: 'en-GB' },
+  { tld: 'de',      flag: '🇩🇪', name: 'Germany',         region: 'Europe',   locale: 'de-DE' },
+  { tld: 'fr',      flag: '🇫🇷', name: 'France',          region: 'Europe',   locale: 'fr-FR' },
+  { tld: 'it',      flag: '🇮🇹', name: 'Italy',           region: 'Europe',   locale: 'it-IT' },
+  { tld: 'es',      flag: '🇪🇸', name: 'Spain',           region: 'Europe',   locale: 'es-ES' },
+  { tld: 'nl',      flag: '🇳🇱', name: 'Netherlands',     region: 'Europe',   locale: 'nl-NL' },
+  { tld: 'se',      flag: '🇸🇪', name: 'Sweden',          region: 'Europe',   locale: 'sv-SE' },
+  { tld: 'pl',      flag: '🇵🇱', name: 'Poland',          region: 'Europe',   locale: 'pl-PL' },
+  // Asia-Pac
+  { tld: 'in',      flag: '🇮🇳', name: 'India',           region: 'Asia-Pac', locale: 'en-IN' },
+  { tld: 'co.jp',   flag: '🇯🇵', name: 'Japan',           region: 'Asia-Pac', locale: 'ja-JP' },
+  { tld: 'sg',      flag: '🇸🇬', name: 'Singapore',       region: 'Asia-Pac', locale: 'en-SG' },
+  { tld: 'com.au',  flag: '🇦🇺', name: 'Australia',       region: 'Asia-Pac', locale: 'en-AU' },
+  // MENA
+  { tld: 'ae',      flag: '🇦🇪', name: 'UAE',             region: 'MENA',     locale: 'en-AE' },
+  { tld: 'sa',      flag: '🇸🇦', name: 'Saudi Arabia',    region: 'MENA',     locale: 'ar-SA' },
+  { tld: 'eg',      flag: '🇪🇬', name: 'Egypt',           region: 'MENA',     locale: 'ar-EG' },
+  { tld: 'com.tr',  flag: '🇹🇷', name: 'Turkey',          region: 'MENA',     locale: 'tr-TR' },
 ];
 
+const REGIONS: Region[] = ['Americas', 'Europe', 'Asia-Pac', 'MENA'];
 const ASIN_REGEX = /^[A-Z0-9]{10}$/i;
 const STORAGE_KEY = 'amazon-asin-tool:marketplace';
 
@@ -82,12 +83,10 @@ export default function AmazonAsinToImages() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const dropRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [rawAsins, setRawAsins] = useState('');
   const [marketplace, setMarketplace] = useState<Marketplace>(MARKETPLACES[0]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [searchMarket, setSearchMarket] = useState('');
+  const [activeRegion, setActiveRegion] = useState<Region>(MARKETPLACES[0].region);
   const [includeVariants, setIncludeVariants] = useState(true);
   const [hiRes, setHiRes] = useState(true);
   const [maxPerAsin, setMaxPerAsin] = useState<string>('');
@@ -104,7 +103,10 @@ export default function AmazonAsinToImages() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const found = MARKETPLACES.find((m) => m.tld === saved);
-        if (found) setMarketplace(found);
+        if (found) {
+          setMarketplace(found);
+          setActiveRegion(found.region);
+        }
       }
     } catch { /* ignore */ }
   }, []);
@@ -112,17 +114,6 @@ export default function AmazonAsinToImages() {
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, marketplace.tld); } catch { /* ignore */ }
   }, [marketplace]);
-
-  /* ── Close dropdown on outside click ── */
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    if (dropdownOpen) document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [dropdownOpen]);
 
   /* ── FILE UPLOAD ── */
   const handleFile = async (file: File) => {
@@ -154,7 +145,6 @@ export default function AmazonAsinToImages() {
   /* ── PARSE ASINS ── */
   const parsed = useMemo<ParsedAsins>(() => {
     if (!rawAsins?.trim()) return { total: 0, valid: [], invalid: [] };
-    // Split on commas, whitespace, newlines, tabs, semicolons
     const tokens = rawAsins
       .replace(/["']/g, '')
       .split(/[\s,;|]+/)
@@ -264,23 +254,11 @@ export default function AmazonAsinToImages() {
   /* ── CLEANUP ── */
   useEffect(() => () => { controllerRef.current?.abort(); }, []);
 
-  /* ── Filter marketplaces by search ── */
-  const filteredMarkets = useMemo(() => {
-    const q = searchMarket.trim().toLowerCase();
-    if (!q) return MARKETPLACES;
-    return MARKETPLACES.filter(
-      (m) => m.name.toLowerCase().includes(q) || m.tld.toLowerCase().includes(q)
-    );
-  }, [searchMarket]);
-
-  const groupedMarkets = useMemo(() => {
-    const groups: Record<string, Marketplace[]> = {};
-    for (const m of filteredMarkets) {
-      if (!groups[m.region]) groups[m.region] = [];
-      groups[m.region].push(m);
-    }
-    return groups;
-  }, [filteredMarkets]);
+  /* ── Markets for active region ── */
+  const visibleMarkets = useMemo(
+    () => MARKETPLACES.filter((m) => m.region === activeRegion),
+    [activeRegion],
+  );
 
   /* ─────────────────────────────────────────
      LEFT PANEL
@@ -306,148 +284,147 @@ export default function AmazonAsinToImages() {
           70%  { transform:scale(1.2); opacity:1; }
           100% { transform:scale(1); opacity:1; }
         }
-        @keyframes dropdownIn {
-          from { opacity:0; transform:translateY(-6px); }
-          to   { opacity:1; transform:translateY(0); }
+        @keyframes pillPop {
+          from { transform: scale(0.92); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
         }
         .asin-card { animation: fadeSlideUp 0.5s cubic-bezier(0.22,1,0.36,1) both; }
         .progress-pulse { animation: progressPulse 1.2s ease-in-out infinite; }
         .spin-slow { animation: spinSlow 1.5s linear infinite; }
         .check-pop { animation: checkPop 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
-        .dropdown-in { animation: dropdownIn 0.18s cubic-bezier(0.22,1,0.36,1) both; }
+        .pill-pop  { animation: pillPop 0.22s cubic-bezier(0.22,1,0.36,1) both; }
         .drop-zone-inner:hover { border-color: #f97316 !important; background: rgba(249,115,22,0.04) !important; }
         .row-item:hover { background: rgba(249,115,22,0.04) !important; border-color: rgba(249,115,22,0.2) !important; }
-        .market-item:hover { background: rgba(249,115,22,0.06) !important; }
+        .flag-pill:hover { transform: translateY(-2px); border-color: rgba(249,115,22,0.4) !important; }
+        .flag-pill { transition: transform 0.15s, border-color 0.15s, background 0.15s; }
+        .tab-btn:hover { color: #94a3b8 !important; }
         .option-row:hover { background: rgba(249,115,22,0.03) !important; }
       `}</style>
 
-      {/* ── MARKETPLACE SELECTOR ── */}
-      <div ref={dropdownRef} className="asin-card" style={{ position: 'relative', animationDelay: '0.02s' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <Globe size={11} color="#475569" />
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', color: '#475569' }}>
-            MARKETPLACE
-          </span>
-        </div>
-        <button
-          onClick={() => setDropdownOpen((v) => !v)}
-          style={{
-            width: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: '#0a0f1a',
-            border: `1.5px solid ${dropdownOpen ? '#f97316' : '#1e293b'}`,
-            borderRadius: 12,
-            padding: '12px 14px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>{marketplace.flag}</span>
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: '0.82rem', color: '#e2e8f0' }}>
-                {marketplace.name}
-              </span>
-              <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.65rem', color: '#475569' }}>
-                amazon.{marketplace.tld}
-              </span>
+      {/* ── MARKETPLACE PICKER ── */}
+      <div className="asin-card" style={{ animationDelay: '0.02s' }}>
+        {/* Header row: label + currently selected indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Globe size={11} color="#475569" />
+            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', color: '#475569' }}>
+              MARKETPLACE
             </span>
-          </span>
-          <ChevronDown size={14} color="#475569" style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
-
-        {dropdownOpen && (
-          <div
-            className="dropdown-in"
-            style={{
-              position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-              background: '#0a0f1a',
-              border: '1.5px solid #1e293b',
-              borderRadius: 12,
-              boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
-              maxHeight: 320, overflow: 'hidden',
-              zIndex: 50,
-              display: 'flex', flexDirection: 'column',
-            }}
-          >
-            <div style={{ position: 'relative', padding: 10, borderBottom: '1px solid #1e293b' }}>
-              <Search size={12} color="#475569" style={{ position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)' }} />
-              <input
-                autoFocus
-                value={searchMarket}
-                onChange={(e) => setSearchMarket(e.target.value)}
-                placeholder="Search country or TLD…"
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #1e293b',
-                  borderRadius: 8,
-                  padding: '7px 10px 7px 28px',
-                  fontFamily: "'Outfit',sans-serif",
-                  fontSize: '0.78rem',
-                  color: '#e2e8f0',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-            <div style={{ overflowY: 'auto', maxHeight: 260 }}>
-              {Object.keys(groupedMarkets).length === 0 ? (
-                <div style={{ padding: 16, textAlign: 'center', fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: '#475569' }}>
-                  No matches
-                </div>
-              ) : (
-                Object.entries(groupedMarkets).map(([region, items]) => (
-                  <div key={region}>
-                    <div style={{
-                      padding: '8px 14px 4px',
-                      fontFamily: "'Outfit',sans-serif",
-                      fontSize: '0.6rem',
-                      fontWeight: 700,
-                      letterSpacing: '0.1em',
-                      color: '#334155',
-                      background: '#0a0f1a',
-                      position: 'sticky',
-                      top: 0,
-                    }}>
-                      {region.toUpperCase()}
-                    </div>
-                    {items.map((m) => {
-                      const selected = m.tld === marketplace.tld;
-                      return (
-                        <button
-                          key={m.tld}
-                          className="market-item"
-                          onClick={() => { setMarketplace(m); setDropdownOpen(false); setSearchMarket(''); }}
-                          style={{
-                            width: '100%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '8px 14px',
-                            background: selected ? 'rgba(249,115,22,0.08)' : 'transparent',
-                            border: 'none',
-                            borderLeft: selected ? '2px solid #f97316' : '2px solid transparent',
-                            cursor: 'pointer',
-                            transition: 'background 0.15s',
-                          }}
-                        >
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: '1rem', lineHeight: 1 }}>{m.flag}</span>
-                            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.78rem', color: selected ? '#f97316' : '#e2e8f0' }}>
-                              {m.name}
-                            </span>
-                          </span>
-                          <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.65rem', color: '#475569' }}>
-                            .{m.tld}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-            </div>
           </div>
-        )}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(249,115,22,0.08)',
+            border: '1px solid rgba(249,115,22,0.3)',
+            borderRadius: 99,
+            padding: '4px 10px',
+          }}>
+            <span style={{ fontSize: '0.9rem', lineHeight: 1 }}>{marketplace.flag}</span>
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem', color: '#f97316', fontWeight: 600 }}>
+              amazon.{marketplace.tld}
+            </span>
+          </div>
+        </div>
+
+        {/* Region tabs */}
+        <div style={{
+          display: 'flex', gap: 4,
+          background: '#0a0f1a',
+          border: '1.5px solid #1e293b',
+          borderRadius: 10,
+          padding: 4,
+          marginBottom: 8,
+        }}>
+          {REGIONS.map((region) => {
+            const active = region === activeRegion;
+            const containsSelected = marketplace.region === region;
+            return (
+              <button
+                key={region}
+                className="tab-btn"
+                onClick={() => setActiveRegion(region)}
+                style={{
+                  flex: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                  padding: '7px 6px',
+                  borderRadius: 7,
+                  border: 'none',
+                  background: active ? '#f97316' : 'transparent',
+                  color: active ? '#fff' : '#475569',
+                  fontFamily: "'Outfit',sans-serif",
+                  fontSize: '0.66rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: active ? '0 2px 8px rgba(249,115,22,0.3)' : 'none',
+                }}
+              >
+                {region.toUpperCase()}
+                {containsSelected && !active && (
+                  <span style={{
+                    width: 5, height: 5, borderRadius: '50%', background: '#f97316',
+                    boxShadow: '0 0 6px #f97316',
+                  }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Flag pill grid */}
+        <div style={{
+          background: '#0a0f1a',
+          border: '1.5px solid #1e293b',
+          borderRadius: 12,
+          padding: 10,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 8,
+        }}>
+          {visibleMarkets.map((m) => {
+            const selected = m.tld === marketplace.tld;
+            return (
+              <button
+                key={m.tld}
+                className="flag-pill pill-pop"
+                onClick={() => setMarketplace(m)}
+                title={m.name}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  padding: '12px 6px',
+                  background: selected ? 'rgba(249,115,22,0.1)' : '#0f172a',
+                  border: `1.5px solid ${selected ? '#f97316' : '#1e293b'}`,
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  boxShadow: selected ? '0 0 0 3px rgba(249,115,22,0.15), 0 0 16px rgba(249,115,22,0.2)' : 'none',
+                  position: 'relative',
+                }}
+              >
+                {selected && (
+                  <CheckCircle2
+                    size={11}
+                    color="#f97316"
+                    style={{ position: 'absolute', top: 4, right: 4 }}
+                  />
+                )}
+                <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{m.flag}</span>
+                <span style={{
+                  fontFamily: "'IBM Plex Mono',monospace",
+                  fontSize: '0.62rem',
+                  color: selected ? '#f97316' : '#94a3b8',
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                }}>
+                  .{m.tld}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── ASIN INPUT ── */}
