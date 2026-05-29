@@ -419,6 +419,15 @@ export const TOOLS: readonly Tool[] = [
     priority: 5,
     keywords: ['image', 'resize', 'rename', 'crop', 'thumbnail'],
   },
+   {
+    slug: 'amazon-asin-to-images',
+    label: 'Download Images from ASINs',
+    description: 'download ASINs image and rename them to Amazon standards',
+    category: 'assets',
+    icon: ImagePlus,
+    priority: 5,
+    keywords: ['image', 'bulk', 'global', 'asin', 'amazon'],
+  },
   {
     slug: 'sku-generator',
     label: 'SKU Generator',
