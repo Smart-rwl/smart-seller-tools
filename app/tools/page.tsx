@@ -234,7 +234,7 @@ function ToolsIndexInner() {
                 placeholder="Search tools — PPC, FNSKU, keyword…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full rounded-lg bg-slate-900 border border-slate-700 pl-9 pr-24 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+                className="w-full rounded-lg bg-slate-900 border border-slate-700 pl-9 pr-24 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition"
                 spellCheck={false}
                 autoComplete="off"
               />
@@ -297,13 +297,13 @@ function ToolsIndexInner() {
                     key={tool.slug}
                     href={`/tools/${tool.slug}`}
                     onClick={() => logRecent(tool.slug)}
-                    className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-indigo-500/50 transition px-3 py-2.5"
+                    className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-orange-500/50 transition px-3 py-2.5"
                   >
-                    <div className="w-7 h-7 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                      <Icon className="w-3.5 h-3.5 text-indigo-400" />
+                    <div className="w-7 h-7 rounded-md bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                      <Icon className="w-3.5 h-3.5 text-orange-400" />
                     </div>
                     <span className="text-sm text-slate-200 truncate flex-1">{tool.label}</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-indigo-400 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition" />
+                    <ArrowUpRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-orange-400 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition" />
                   </Link>
                 );
               })}
@@ -326,7 +326,7 @@ function ToolsIndexInner() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition"
+              className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1.5 transition"
             >
               <X className="w-3 h-3" /> Clear filters
             </button>
@@ -352,10 +352,10 @@ function ToolsIndexInner() {
                   href={`/tools/${tool.slug}`}
                   onClick={() => logRecent(tool.slug)}
                   style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}
-                  className={`group relative rounded-xl border bg-slate-900/70 hover:bg-slate-900 transition-all p-4 flex flex-col justify-between shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:shadow-indigo-900/30 animate-[cardIn_0.4s_ease-out_both] ${
+                  className={`group relative rounded-xl border bg-slate-900/70 hover:bg-slate-900 transition-all p-4 flex flex-col justify-between shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:shadow-orange-900/30 animate-[cardIn_0.4s_ease-out_both] ${
                     isPinned
                       ? 'border-amber-500/40 hover:border-amber-500/60 ring-1 ring-amber-500/10'
-                      : 'border-slate-800 hover:border-indigo-500/70'
+                      : 'border-slate-800 hover:border-orange-500/70'
                   }`}
                 >
                   {/* Pin button */}
@@ -374,8 +374,8 @@ function ToolsIndexInner() {
 
                   <div>
                     <div className="flex items-start gap-2.5 min-w-0 pr-7 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0 group-hover:bg-indigo-500/15 transition-colors">
-                        <Icon className="w-4 h-4 text-indigo-400" />
+                      <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0 group-hover:bg-orange-500/15 transition-colors">
+                        <Icon className="w-4 h-4 text-orange-400" />
                       </div>
                       <h2 className="font-semibold text-sm md:text-base text-slate-50 group-hover:text-white truncate pt-1">
                         {tool.label}
@@ -407,7 +407,7 @@ function ToolsIndexInner() {
 
                   <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500">
                     <span className="font-mono opacity-70 truncate max-w-[60%]">/{tool.slug}</span>
-                    <span className="inline-flex items-center gap-1 text-indigo-400 transition-transform group-hover:translate-x-0.5">
+                    <span className="inline-flex items-center gap-1 text-orange-400 transition-transform group-hover:translate-x-0.5">
                       Open tool
                       <ArrowUpRight className="w-3 h-3" />
                     </span>
@@ -496,7 +496,7 @@ function TabButton({
       onClick={onClick}
       className={`inline-flex items-center gap-2 text-xs md:text-sm px-3 py-1.5 rounded-full border transition-colors ${
         active
-          ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm shadow-indigo-900/30'
+          ? 'bg-orange-600 border-orange-500 text-white shadow-sm shadow-orange-900/30'
           : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600'
       }`}
     >
@@ -552,7 +552,7 @@ function EmptyState({
       {hasFilters && (
         <button
           onClick={onClear}
-          className="inline-flex items-center gap-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition shadow-lg shadow-indigo-900/30"
+          className="inline-flex items-center gap-2 text-sm bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-medium transition shadow-lg shadow-orange-900/30"
         >
           <X className="w-3.5 h-3.5" /> Clear all filters
         </button>

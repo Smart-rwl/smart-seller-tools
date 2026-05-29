@@ -88,7 +88,7 @@ const SMART_MAP: Record<string, string> = {
 };
 
 const PART_COLORS = [
-  { bg: 'bg-indigo-500/10',  text: 'text-indigo-300',  ring: 'ring-indigo-500/30',  dot: 'bg-indigo-500'  },
+  { bg: 'bg-orange-500/10',  text: 'text-orange-300',  ring: 'ring-orange-500/30',  dot: 'bg-orange-500'  },
   { bg: 'bg-emerald-500/10', text: 'text-emerald-300', ring: 'ring-emerald-500/30', dot: 'bg-emerald-500' },
   { bg: 'bg-sky-500/10',     text: 'text-sky-300',     ring: 'ring-sky-500/30',     dot: 'bg-sky-500'     },
   { bg: 'bg-amber-500/10',   text: 'text-amber-300',   ring: 'ring-amber-500/30',   dot: 'bg-amber-500'   },
@@ -412,7 +412,7 @@ export default function InventoryArchitect() {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
           <div>
             <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Barcode className="w-8 h-8 text-indigo-500" />
+              <Barcode className="w-8 h-8 text-orange-500" />
               Inventory System Architect
             </h1>
             <p className="text-slate-400 mt-2">
@@ -427,13 +427,13 @@ export default function InventoryArchitect() {
             <div className="flex bg-slate-900 rounded-lg border border-slate-800 p-1">
               <button
                 onClick={() => setBulkMode(false)}
-                className={`px-3 py-1 text-xs font-bold rounded transition ${!bulkMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`px-3 py-1 text-xs font-bold rounded transition ${!bulkMode ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
               >
                 Single
               </button>
               <button
                 onClick={() => setBulkMode(true)}
-                className={`px-3 py-1 text-xs font-bold rounded transition flex items-center gap-1 ${bulkMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`px-3 py-1 text-xs font-bold rounded transition flex items-center gap-1 ${bulkMode ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
               >
                 <Sparkles className="w-3 h-3" /> Bulk Variants
               </button>
@@ -499,7 +499,7 @@ export default function InventoryArchitect() {
                 {attributes.length < MAX_ATTRIBUTES && (
                   <button
                     onClick={addAttribute}
-                    className="w-full py-2 px-3 border border-dashed border-slate-700 hover:border-indigo-500 hover:bg-indigo-500/5 rounded-lg text-slate-500 hover:text-indigo-300 text-sm flex items-center justify-center gap-2 transition"
+                    className="w-full py-2 px-3 border border-dashed border-slate-700 hover:border-orange-500 hover:bg-orange-500/5 rounded-lg text-slate-500 hover:text-orange-300 text-sm flex items-center justify-center gap-2 transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add attribute
                   </button>
@@ -514,7 +514,7 @@ export default function InventoryArchitect() {
                     <button
                       key={sep || 'none'}
                       onClick={() => setSeparator(sep)}
-                      className={`flex-1 py-1.5 text-xs font-mono rounded transition ${separator === sep ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                      className={`flex-1 py-1.5 text-xs font-mono rounded transition ${separator === sep ? 'bg-orange-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
                     >
                       {sep === '' ? 'None' : sep}
                     </button>
@@ -539,7 +539,7 @@ export default function InventoryArchitect() {
                           <button
                             key={n}
                             onClick={() => setCounterPad(n)}
-                            className={`flex-1 py-1 text-xs font-mono rounded transition ${counterPad === n ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                            className={`flex-1 py-1 text-xs font-mono rounded transition ${counterPad === n ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'}`}
                           >
                             {n}
                           </button>
@@ -553,7 +553,7 @@ export default function InventoryArchitect() {
                         min={0}
                         value={counterStart}
                         onChange={(e) => setCounterStart(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white font-mono text-center focus:border-indigo-500 outline-none"
+                        className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-white font-mono text-center focus:border-orange-500 outline-none"
                       />
                     </div>
                   </div>
@@ -567,7 +567,7 @@ export default function InventoryArchitect() {
                 <button
                   onClick={generateBulk}
                   disabled={bulkCount === 0}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg shadow-indigo-900/20 transition flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg shadow-orange-900/20 transition flex items-center justify-center gap-2"
                 >
                   <Zap className="w-4 h-4" />
                   Generate {bulkCount > 0 ? bulkCount : ''} SKU{bulkCount === 1 ? '' : 's'}
@@ -576,7 +576,7 @@ export default function InventoryArchitect() {
                 <button
                   onClick={saveSingle}
                   disabled={!previewSku}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg shadow-indigo-900/20 transition flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg shadow-orange-900/20 transition flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" /> Save to List
                 </button>
@@ -595,17 +595,17 @@ export default function InventoryArchitect() {
           <div className="lg:col-span-7 space-y-6">
 
             {/* Live Preview */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 rounded-xl border border-slate-800 p-8 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/40 rounded-xl border border-slate-800 p-8 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-[0.04] pointer-events-none">
                 <Barcode className="w-48 h-48 text-white" />
               </div>
 
               <div className="flex items-center justify-between mb-4 relative">
-                <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                <p className="text-xs font-bold text-orange-400 uppercase tracking-widest">
                   {bulkMode ? 'Bulk Preview · First Variant' : 'Live Preview'}
                 </p>
                 {bulkMode && bulkCount > 0 && (
-                  <span className="text-xs bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-2.5 py-1 rounded-full font-mono">
+                  <span className="text-xs bg-orange-500/15 border border-orange-500/30 text-orange-300 px-2.5 py-1 rounded-full font-mono">
                     {bulkCount} combinations
                   </span>
                 )}
@@ -691,7 +691,7 @@ export default function InventoryArchitect() {
                       value={historySearch}
                       onChange={(e) => setHistorySearch(e.target.value)}
                       placeholder="Filter…"
-                      className="w-full bg-slate-900 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-indigo-500 outline-none"
+                      className="w-full bg-slate-900 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:border-orange-500 outline-none"
                     />
                   </div>
                   <button
@@ -845,7 +845,7 @@ function FieldRow(props: FieldRowProps) {
                 if (e.key === 'Enter') e.currentTarget.blur();
                 if (e.key === 'Escape') props.onEndEdit?.();
               }}
-              className="text-xs font-bold text-white bg-slate-950 border border-indigo-500 rounded px-1.5 py-0.5 outline-none uppercase w-32"
+              className="text-xs font-bold text-white bg-slate-950 border border-orange-500 rounded px-1.5 py-0.5 outline-none uppercase w-32"
             />
           ) : (
             <button
@@ -902,7 +902,7 @@ function FieldRow(props: FieldRowProps) {
         type="text"
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
-        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono uppercase focus:border-indigo-500 outline-none transition"
+        className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono uppercase focus:border-orange-500 outline-none transition"
         placeholder={props.placeholder}
       />
     </div>
@@ -942,7 +942,7 @@ function ShortenPicker({ value, onChange }: ShortenPickerProps) {
             <button
               key={mode}
               onClick={() => { onChange(mode); setOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-slate-800 transition ${value === mode ? 'text-indigo-400' : 'text-slate-300'}`}
+              className={`w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-slate-800 transition ${value === mode ? 'text-orange-400' : 'text-slate-300'}`}
             >
               {SHORTEN_LABELS[mode]}
             </button>
@@ -962,7 +962,7 @@ function Toggle({ checked, onChange }: ToggleProps) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative w-9 h-5 rounded-full transition ${checked ? 'bg-indigo-600' : 'bg-slate-700'}`}
+      className={`relative w-9 h-5 rounded-full transition ${checked ? 'bg-orange-600' : 'bg-slate-700'}`}
       role="switch"
       aria-checked={checked}
     >
