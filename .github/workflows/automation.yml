@@ -1,5 +1,4 @@
 name: Seller Automation
-
 on:
   schedule:
     - cron: "0 */6 * * *"   # every 6 hours
@@ -8,20 +7,20 @@ on:
 jobs:
   run-tools:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node
         if: hashFiles('package.json') != ''
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: npm
 
       - name: Install deps
         if: hashFiles('package.json') != ''
-        run: npm install
+        run: npm ci
 
       - name: Run automation script
         run: node src/index.js
