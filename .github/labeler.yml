@@ -1,0 +1,125 @@
+# Maps file paths, branch names, and PR titles to labels.
+# Used by .github/workflows/pr-labeler.yml (actions/labeler@v6 syntax).
+
+# ─────────────────────────────────────────────
+#   AREA — by file path
+# ─────────────────────────────────────────────
+
+"area:tools":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/tools/**'
+          - 'app/(tools)/**'
+          - 'app/components/tools/**'
+
+"area:api":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/api/**'
+          - 'pages/api/**'
+
+"area:ui":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'app/components/**'
+          - 'components/**'
+          - 'app/**/layout.tsx'
+          - 'app/**/page.tsx'
+
+"area:workflows":
+  - changed-files:
+      - any-glob-to-any-file: '.github/workflows/**'
+
+"area:deps":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'package.json'
+          - 'package-lock.json'
+          - 'yarn.lock'
+          - 'pnpm-lock.yaml'
+
+"area:db":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'prisma/**'
+          - '**/*.prisma'
+
+"area:config":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'next.config.*'
+          - 'tailwind.config.*'
+          - 'postcss.config.*'
+          - 'tsconfig.json'
+          - '.eslintrc*'
+          - '.prettierrc*'
+          - 'eslint.config.*'
+
+"area:styles":
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.css'
+          - '**/*.scss'
+          - 'app/globals.css'
+
+"area:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.md'
+          - 'docs/**'
+          - 'README*'
+
+"area:tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.test.ts'
+          - '**/*.test.tsx'
+          - '**/*.spec.ts'
+          - '**/*.spec.tsx'
+          - '__tests__/**'
+          - 'tests/**'
+          - 'e2e/**'
+
+"area:assets":
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'public/**'
+          - '**/*.svg'
+          - '**/*.png'
+          - '**/*.jpg'
+          - '**/*.webp'
+          - '**/*.ico'
+
+# ─────────────────────────────────────────────
+#   TYPE — by branch name prefix
+#   (delete this whole section if your team
+#    doesn't prefix branches as feat/fix/etc.)
+# ─────────────────────────────────────────────
+
+"type:feature":
+  - head-branch: ['^feat/', '^feature/']
+
+"type:fix":
+  - head-branch: ['^fix/', '^bugfix/', '^hotfix/']
+
+"type:refactor":
+  - head-branch: ['^refactor/']
+
+"type:chore":
+  - head-branch: ['^chore/', '^build/', '^ci/']
+
+"type:docs":
+  - head-branch: ['^docs/']
+
+# ─────────────────────────────────────────────
+#   STATUS — by PR title
+# ─────────────────────────────────────────────
+
+"WIP":
+  - title:
+      - '^(WIP|\[WIP\]|Draft:|wip:)'
+
+"breaking-change":
+  - title:
+      - '(?i)BREAKING[ _-]CHANGE'
+      - '!:'
