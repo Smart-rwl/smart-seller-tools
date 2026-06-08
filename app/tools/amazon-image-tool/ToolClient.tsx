@@ -16,9 +16,13 @@ import {
   Info,
   Layers,
   Maximize,
+  Music,
+  PlayCircle,
   Trash2,
   UploadCloud,
   X,
+  Video,
+  Play
 } from 'lucide-react';
 
 /* ────────────────────────────────────────────────
@@ -118,14 +122,19 @@ export default function BulkAssetManager() {
 
   const parsed = useMemo(() => parseAsins(asinsInput), [asinsInput]);
 
-  // Free blob URLs when slots change or the component unmounts
+  // Keep a ref to the latest slots state to prevent stale closures in unmount cleanup
+  const slotsRef = useRef(slots);
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
+
+  // Free blob URLs when the component unmounts
   useEffect(() => {
     return () => {
-      slots.forEach((s) => {
+      slotsRef.current.forEach((s) => {
         if (s.previewUrl) URL.revokeObjectURL(s.previewUrl);
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // unmount only — per-replace cleanup handled in updateSlot
 
   // ── Slot mutations ──
@@ -165,10 +174,15 @@ export default function BulkAssetManager() {
       const img = new window.Image();
       img.onload = () => {
         const dims = { w: img.width, h: img.height };
+        
+        // Amazon recommends 1000px+ on the longest side for basic zoom, and 1600px+ for optimal quality
+        const longestSide = Math.max(img.width, img.height);
         const warning =
-          img.width < 1000 && img.height < 1000
-            ? 'Below 1000px — zoom on Amazon will be disabled.'
-            : null;
+          longestSide < 1000
+            ? 'Below 1000px on longest side — zoom on Amazon will be disabled.'
+            : longestSide < 1600
+              ? 'Below 1600px — image will not reach optimal zoom resolution.'
+              : null;
 
         setSlots((prev) => {
           // Find the current index of the slot we started loading for
@@ -559,6 +573,61 @@ export default function BulkAssetManager() {
           </div>
         </div>
 
+        {/* MEDIA INTEGRATION (YOUTUBE & SPOTIFY) */}
+        <div className="mt-16 border-t border-slate-800 pt-10">
+          <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-white">
+            <PlayCircle className="h-6 w-6 text-orange-500" />
+            Watch &amp; Listen
+          </h2>
+
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+            {/* YouTube Embed Slot */}
+            <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-900 p-6">
+              <h3 className="mb-4 flex items-center gap-2 font-bold text-white">
+                <Play className="h-5 w-5 text-red-500" />
+                Video Walkthrough
+              </h3>
+              <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-slate-950">
+                <iframe
+                  className="absolute top-0 left-0 h-full w-full"
+                  src="https://www.youtube.com/embed/qmEN7HVFQ2s?si=TeTTkcGbgqMJVCa8" // Replace placeholder with actual Short / Video ID when published
+                  title="YouTube video player"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Learn how the tool automates your asset renaming process. Swap <code className="text-slate-300">qmEN7HVFQ2s?si=TeTTkcGbgqMJVCa8</code> with your video identifier in the source code to link your upload.
+              </p>
+            </div>
+
+            {/* Spotify Podcast Embed */}
+            <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-900 p-6">
+              <h3 className="mb-4 flex items-center gap-2 font-bold text-white">
+                <Music className="h-5 w-5 text-emerald-500" />
+                Podcast Discussion
+              </h3>
+              <div className="flex-1 w-full">
+                <iframe
+                  style={{ borderRadius: '12px' }}
+                  src="https://open.spotify.com/embed/episode/0sfM0NZscGEg16Kc8DCnx2?si=qtlmy1z_RBeQFHM94M_QRQ"
+                  width="100%"
+                  height="232" // Set to render dynamically matching standard image aspects
+                  frameBorder="0"
+                  allowFullScreen={true}
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                ></iframe>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Listen to our podcast episode covering FBA automation, bulk workflows, and listing strategies.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* CREATOR FOOTER */}
         <div className="mt-12 flex flex-col items-center justify-center space-y-2 border-t border-slate-800 pt-8">
           <p className="text-sm font-medium text-slate-500">Created by SmartRwl</p>
@@ -698,7 +767,7 @@ function MasterSlotCard({
             />
             {slot.warning && (
               <div className="absolute -bottom-2 -right-2 flex items-center gap-1 rounded-full bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm">
-                <AlertTriangle className="h-3 w-3" /> Low res
+                <AlertTriangle className="h-3 w-3" /> Warning
               </div>
             )}
           </div>
@@ -740,7 +809,7 @@ function MasterSlotCard({
             }`}
           >
             <Maximize className="h-3 w-3" />
-            <span>{slot.dims ? `${slot.dims.w} × ${slot.dims.h}` : 'Reading…'}</span>
+            <span className="truncate">{slot.dims ? `${slot.dims.w} × ${slot.dims.h}` : 'Reading…'}</span>
           </div>
           <button
             onClick={onClearFile}
