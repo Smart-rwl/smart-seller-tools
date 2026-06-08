@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   BarChart2,
@@ -21,6 +22,9 @@ import {
   Plus,
   Sparkles,
   Clock,
+  Trophy,
+  ShieldAlert,
+  AlertTriangle,
 } from 'lucide-react';
 
 import AnimatedNumber from '@/app/components/ab-test/AnimatedNumber';
@@ -40,11 +44,7 @@ import {
   decodeStateFromURL,
 } from '@/app/services/ab-test/url-state';
 import { buildCSV, downloadCSV } from '@/app/services/ab-test/csv-export';
-import {
-  DEFAULT_VARIANTS,
-  MAX_VARIANTS,
-  STATUS_CONFIG,
-} from '@/app/config/ab-test';
+import { DEFAULT_VARIANTS, MAX_VARIANTS } from '@/app/config/ab-test';
 import type {
   Variant,
   VariantMetrics,
@@ -52,6 +52,73 @@ import type {
   TestStatus,
 } from './types';
 
+/* ─────────────────────────────────────────────
+   LOCAL STATUS STYLES (orange-themed, replaces external STATUS_CONFIG colors)
+───────────────────────────────────────────── */
+const STATUS_STYLES: Record<TestStatus, {
+  label: string;
+  headline: string;
+  bgClass: string;
+  borderClass: string;
+  textClass: string;
+  hexColor: string;
+}> = {
+  winner: {
+    label: 'WINNER · SHIP IT',
+    headline: 'Ship the variant.',
+    bgClass: 'bg-emerald-500/10',
+    borderClass: 'border-emerald-500/30',
+    textClass: 'text-emerald-400',
+    hexColor: '#10b981',
+  },
+  loser: {
+    label: 'STOP · KEEP CONTROL',
+    headline: 'Keep the control.',
+    bgClass: 'bg-rose-500/10',
+    borderClass: 'border-rose-500/30',
+    textClass: 'text-rose-400',
+    hexColor: '#f43f5e',
+  },
+  leaning: {
+    label: 'TRENDING',
+    headline: 'Keep running the test.',
+    bgClass: 'bg-amber-500/10',
+    borderClass: 'border-amber-500/30',
+    textClass: 'text-amber-400',
+    hexColor: '#f59e0b',
+  },
+  neutral: {
+    label: 'INCONCLUSIVE',
+    headline: 'Need more data.',
+    bgClass: 'bg-slate-800/40',
+    borderClass: 'border-slate-700',
+    textClass: 'text-slate-400',
+    hexColor: '#64748b',
+  },
+};
+
+/* ─────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────── */
+/** Cohen's h effect size for two proportions — magnitude-of-difference between p1 and p2. */
+function cohensH(p1: number, p2: number): number {
+  const phi = (p: number) => 2 * Math.asin(Math.sqrt(Math.max(0, Math.min(1, p))));
+  return Math.abs(phi(p1) - phi(p2));
+}
+
+function cohensHLabel(h: number): { label: string; tone: string } {
+  if (h >= 0.8) return { label: 'Large', tone: 'text-emerald-400' };
+  if (h >= 0.5) return { label: 'Medium', tone: 'text-amber-400' };
+  if (h >= 0.2) return { label: 'Small', tone: 'text-orange-400' };
+  return { label: 'Negligible', tone: 'text-slate-500' };
+}
+
+const fmtCurrency = (n: number, decimals = 0) =>
+  '$' + n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+
+/* ─────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────── */
 export default function ToolClient() {
   const [variants, setVariants] = useState<Variant[]>(DEFAULT_VARIANTS);
   const [duration, setDuration] = useState<number>(30);
@@ -92,6 +159,7 @@ export default function ToolClient() {
   };
 
   const handleReset = () => {
+    if (!confirm('Reset all variants and settings?')) return;
     setVariants(DEFAULT_VARIANTS);
     setDuration(30);
     if (typeof window !== 'undefined') {
@@ -99,6 +167,7 @@ export default function ToolClient() {
     }
   };
 
+  /* ── Per-variant metrics ── */
   const variantMetrics: VariantMetrics[] = useMemo(() => {
     return variants.map((v) => {
       const n = Number(v.visitors) || 0;
@@ -117,6 +186,33 @@ export default function ToolClient() {
     });
   }, [variants]);
 
+  /* ── Data sanity check ── */
+  const sanityIssues = useMemo(() => {
+    const issues: { variant: string; text: string }[] = [];
+    variantMetrics.forEach((vm) => {
+      if (vm.conversions > vm.visitors && vm.visitors > 0) {
+        issues.push({
+          variant: vm.name,
+          text: `${vm.conversions.toLocaleString()} conversions on ${vm.visitors.toLocaleString()} visitors. Likely a typo — conversions can't exceed visitors.`,
+        });
+      }
+      if (vm.visitors > 0 && vm.visitors < 30) {
+        issues.push({
+          variant: vm.name,
+          text: `Only ${vm.visitors} visitors. Below ~30, the Z-test approximation breaks down — use Fisher's exact or wait for more data.`,
+        });
+      }
+      if (vm.revenue > 0 && vm.conversions === 0) {
+        issues.push({
+          variant: vm.name,
+          text: `Revenue (${fmtCurrency(vm.revenue)}) with zero conversions. AOV math will be undefined.`,
+        });
+      }
+    });
+    return issues;
+  }, [variantMetrics]);
+
+  /* ── Pairwise comparisons (each variant vs control) ── */
   const comparisons: ComparisonMetrics[] = useMemo(() => {
     const control = variantMetrics[0];
     if (!control || control.visitors === 0) return [];
@@ -141,24 +237,16 @@ export default function ToolClient() {
       }
 
       const { z, p, confidence } = zTestProportions(
-        control.conversions,
-        control.visitors,
-        variant.conversions,
-        variant.visitors,
+        control.conversions, control.visitors,
+        variant.conversions, variant.visitors,
       );
-
       const ci = liftConfidenceInterval(
-        control.conversions,
-        control.visitors,
-        variant.conversions,
-        variant.visitors,
+        control.conversions, control.visitors,
+        variant.conversions, variant.visitors,
       );
-
       const bayesianProb = bayesianProbability(
-        control.conversions,
-        control.visitors,
-        variant.conversions,
-        variant.visitors,
+        control.conversions, control.visitors,
+        variant.conversions, variant.visitors,
         5000,
       );
 
@@ -175,31 +263,41 @@ export default function ToolClient() {
       const monthlyRevLift = (variant.rpv - control.rpv) * dailyVisitors * 30;
 
       return {
-        control,
-        variant,
-        liftCR,
-        liftRPV,
-        liftAOV,
-        zScore: z,
-        pValue: p,
-        confidence,
-        bayesianProb,
-        ciLow: ci.low,
-        ciHigh: ci.high,
-        status,
-        monthlyRevLift,
+        control, variant,
+        liftCR, liftRPV, liftAOV,
+        zScore: z, pValue: p, confidence, bayesianProb,
+        ciLow: ci.low, ciHigh: ci.high,
+        status, monthlyRevLift,
       };
     });
   }, [variantMetrics, duration]);
 
+  /* ── Primary comparison + best winner across all variants ── */
   const primary = comparisons[0];
+  const bestWinner = useMemo(() => {
+    const winners = comparisons.filter((c) => c.status === 'winner' && c.liftCR > 0);
+    if (winners.length === 0) return null;
+    return winners.reduce((best, c) => (c.liftCR > best.liftCR ? c : best), winners[0]);
+  }, [comparisons]);
 
+  /* ── Warnings ── */
   const peekingWarning = useMemo(() => {
     if (!primary) return false;
     const totalSample = primary.control.visitors + primary.variant.visitors;
     return primary.confidence >= 95 && totalSample < 1000;
   }, [primary]);
 
+  const multipleComparisonsWarning = comparisons.length >= 2;
+  const bonferroniThreshold = comparisons.length > 0 ? 5 / comparisons.length : 5;
+
+  /* ── Effect size for primary ── */
+  const effectSize = useMemo(() => {
+    if (!primary) return null;
+    const h = cohensH(primary.control.cr, primary.variant.cr);
+    return { h, ...cohensHLabel(h) };
+  }, [primary]);
+
+  /* ── Share + export ── */
   const exportCSV = useCallback(() => {
     if (!primary) return;
     const csv = buildCSV(variantMetrics, comparisons);
@@ -220,411 +318,151 @@ export default function ToolClient() {
     }
   }, [variants, duration]);
 
-  const sc = primary ? STATUS_CONFIG[primary.status] : null;
+  const ss = primary ? STATUS_STYLES[primary.status] : null;
 
   const verdictIcon = (status: TestStatus) => {
     switch (status) {
-      case 'winner':
-        return <CheckCircle2 size={22} />;
-      case 'loser':
-        return <XCircle size={22} />;
-      case 'leaning':
-        return <TrendingUp size={22} />;
-      default:
-        return <Activity size={22} />;
+      case 'winner':  return <CheckCircle2 className="w-5 h-5" />;
+      case 'loser':   return <XCircle className="w-5 h-5" />;
+      case 'leaning': return <TrendingUp className="w-5 h-5" />;
+      default:        return <Activity className="w-5 h-5" />;
     }
   };
 
+  /* ─────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────── */
   return (
-    <div
-      style={{
-        fontFamily: "'Space Grotesk', sans-serif",
-        background: '#020617',
-        minHeight: '100vh',
-        color: '#cbd5e1',
-      }}
-    >
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans relative">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
-        @import url('https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.css');
-
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
-        @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); } 70% { box-shadow: 0 0 0 12px rgba(99,102,241,0); } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); } }
-        @keyframes scanline { 0% { transform: translateY(-100%); } 100% { transform: translateY(100vh); } }
+        @keyframes pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
+          70% { box-shadow: 0 0 0 12px rgba(249,115,22,0); }
+          100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
+        }
         .fade-up { animation: fadeUp 0.6s cubic-bezier(0.22,1,0.36,1) both; }
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
+        .delay-1 { animation-delay: 0.08s; }
+        .delay-2 { animation-delay: 0.16s; }
+        .delay-3 { animation-delay: 0.24s; }
+        .delay-4 { animation-delay: 0.32s; }
         .shimmer-text {
-          background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
+          background: linear-gradient(90deg, #f97316, #fb923c, #fbbf24, #f97316);
           background-size: 200% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
           animation: shimmer 3s linear infinite;
         }
+        .pulse-orange { animation: pulse-ring 2.5s ease-out infinite; }
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
-        .metric-card { transition: border-color 0.2s, transform 0.2s; }
-        .metric-card:hover { border-color: #334155 !important; transform: translateY(-2px); }
-        .serif-italic { font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; }
-        @media (max-width: 768px) {
-          .input-grid { grid-template-columns: 1fr !important; }
-          .results-grid { grid-template-columns: 1fr !important; }
-          .metrics-row { grid-template-columns: 1fr !important; }
-          .header-row { flex-direction: column; align-items: flex-start !important; }
-        }
       `}</style>
 
+      {/* Dot pattern background */}
       <div
+        className="fixed inset-0 pointer-events-none z-0 opacity-40"
         style={{
-          position: 'fixed',
-          inset: 0,
-          pointerEvents: 'none',
-          zIndex: 0,
-          overflow: 'hidden',
-          opacity: 0.015,
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            height: 2,
-            background: 'linear-gradient(transparent, rgba(99,102,241,0.8), transparent)',
-            animation: 'scanline 8s linear infinite',
-          }}
-        />
-      </div>
-
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 0,
-          pointerEvents: 'none',
           backgroundImage: 'radial-gradient(circle, #1e293b 1px, transparent 1px)',
           backgroundSize: '32px 32px',
-          opacity: 0.4,
         }}
       />
 
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          maxWidth: 1200,
-          margin: '0 auto',
-          padding: '32px 24px 64px',
-        }}
-      >
-        {/* HEADER */}
-        <div className={loaded ? 'fade-up' : ''} style={{ marginBottom: 48 }}>
-          <div
-            className="header-row"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 16,
-            }}
-          >
+      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-8 pb-16">
+
+        {/* ─── HEADER ─── */}
+        <div className={loaded ? 'fade-up' : ''}>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <div
-                  style={{
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    borderRadius: 12,
-                    padding: 10,
-                    boxShadow: '0 0 24px rgba(99,102,241,0.4)',
-                    animation: 'pulse-ring 2.5s ease-out infinite',
-                  }}
-                >
-                  <FlaskConical size={22} color="#fff" />
+              <div className="flex items-center gap-3 mb-3">
+                <div className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-xl p-2.5 shadow-lg shadow-orange-900/30 pulse-orange">
+                  <FlaskConical className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <span
-                    style={{
-                      fontSize: '0.65rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.18em',
-                      color: '#6366f1',
-                      display: 'block',
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
+                  <span className="block text-[10px] font-bold tracking-[0.18em] text-orange-400 font-mono">
                     SMART SELLER TOOLS
                   </span>
-                  <span
-                    style={{
-                      fontSize: '0.6rem',
-                      color: '#334155',
-                      fontWeight: 500,
-                      letterSpacing: '0.1em',
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
+                  <span className="block text-[10px] text-slate-600 font-medium tracking-widest font-mono">
                     STATISTICAL ENGINE v3.0
                   </span>
                 </div>
               </div>
-              <h1
-                style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
-                  fontSize: 'clamp(2rem, 4.4vw, 3rem)',
-                  fontWeight: 600,
-                  lineHeight: 1.02,
-                  color: '#f1f5f9',
-                  marginBottom: 10,
-                  letterSpacing: '-0.035em',
-                }}
-              >
-                A/B Test <span className="serif-italic shimmer-text">significance</span>
-                <br />
-                calculator
+              <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-2 tracking-tight">
+                A/B Test <span className="shimmer-text italic font-light">significance</span> calculator
               </h1>
-              <p style={{ color: '#64748b', fontSize: '0.95rem', maxWidth: 520, lineHeight: 1.6, fontWeight: 400 }}>
-                Frequentist Z-test plus Bayesian probability, multi-variant support, revenue analysis, and shareable
-                results — built for serious e-commerce teams.
+              <p className="text-slate-400 text-sm max-w-xl leading-relaxed">
+                Frequentist Z-test plus Bayesian probability, multi-variant support, revenue analysis, and shareable results — built for serious e-commerce teams.
               </p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Algorithm', value: 'Z-Test · Bayesian' },
-                  { label: 'Threshold', value: 'p < 0.05' },
-                ].map((b) => (
-                  <div
-                    key={b.label}
-                    style={{
-                      background: '#0a0f1a',
-                      border: '1px solid #1e293b',
-                      borderRadius: 10,
-                      padding: '8px 14px',
-                      textAlign: 'right',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '0.6rem',
-                        color: '#334155',
-                        fontWeight: 600,
-                        letterSpacing: '0.12em',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      {b.label}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "'Geist Mono', monospace",
-                        color: '#6366f1',
-                        fontSize: '0.78rem',
-                        fontWeight: 500,
-                        marginTop: 2,
-                      }}
-                    >
-                      {b.value}
-                    </div>
-                  </div>
-                ))}
+
+            <div className="flex flex-col gap-2.5 items-stretch md:items-end">
+              <div className="flex gap-2 flex-wrap">
+                <InfoBadge label="Algorithm" value="Z-Test · Bayesian" />
+                <InfoBadge label="Threshold" value={`p < ${(bonferroniThreshold / 100).toFixed(4)}`} />
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={handleShare}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: '#0a0f1a',
-                    border: '1px solid #1e293b',
-                    borderRadius: 10,
-                    padding: '8px 14px',
-                    color: '#475569',
-                    fontSize: '0.76rem',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    fontFamily: "'Space Grotesk', sans-serif",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#6366f1';
-                    e.currentTarget.style.color = '#6366f1';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#1e293b';
-                    e.currentTarget.style.color = '#475569';
-                  }}
-                >
-                  <Share2 size={13} /> {shareMsg || 'Share'}
-                </button>
-                <button
-                  onClick={exportCSV}
-                  disabled={!primary}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: '#0a0f1a',
-                    border: '1px solid #1e293b',
-                    borderRadius: 10,
-                    padding: '8px 14px',
-                    color: primary ? '#475569' : '#1e293b',
-                    fontSize: '0.76rem',
-                    fontWeight: 500,
-                    cursor: primary ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.2s',
-                    fontFamily: "'Space Grotesk', sans-serif",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!primary) return;
-                    e.currentTarget.style.borderColor = '#10b981';
-                    e.currentTarget.style.color = '#10b981';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#1e293b';
-                    e.currentTarget.style.color = primary ? '#475569' : '#1e293b';
-                  }}
-                >
-                  <Download size={13} /> CSV
-                </button>
-                <button
-                  onClick={handleReset}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: '#0a0f1a',
-                    border: '1px solid #1e293b',
-                    borderRadius: 10,
-                    padding: '8px 14px',
-                    color: '#475569',
-                    fontSize: '0.76rem',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    fontFamily: "'Space Grotesk', sans-serif",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#ef4444';
-                    e.currentTarget.style.color = '#ef4444';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#1e293b';
-                    e.currentTarget.style.color = '#475569';
-                  }}
-                >
-                  <RefreshCw size={13} /> Reset
-                </button>
+              <div className="flex gap-1.5 flex-wrap md:justify-end">
+                <ActionButton onClick={handleShare} icon={<Share2 className="w-3 h-3" />} label={shareMsg || 'Share'} accent="orange" />
+                <ActionButton onClick={exportCSV} icon={<Download className="w-3 h-3" />} label="CSV" accent="emerald" disabled={!primary} />
+                <ActionButton onClick={handleReset} icon={<RefreshCw className="w-3 h-3" />} label="Reset" accent="rose" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* DURATION + ADD VARIANT */}
-        <div
-          className={loaded ? 'fade-up delay-1' : ''}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              background: '#0a0f1a',
-              border: '1px solid #1e293b',
-              borderRadius: 12,
-              padding: '10px 14px',
-            }}
-          >
-            <Clock size={14} color="#6366f1" />
-            <label
-              style={{
-                fontSize: '0.7rem',
-                color: '#475569',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                fontFamily: "'Geist Mono', monospace",
-              }}
-            >
-              TEST DURATION
+        {/* ─── DURATION + ADD VARIANT ─── */}
+        <div className={`${loaded ? 'fade-up delay-1' : ''} flex justify-between items-center gap-3 mb-4 flex-wrap`}>
+          <div className="flex items-center gap-2.5 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+            <Clock className="w-3.5 h-3.5 text-orange-400" />
+            <label className="text-[11px] text-slate-500 font-bold tracking-wider font-mono uppercase">
+              Test duration
             </label>
             <input
-              type="number"
-              min={1}
+              type="number" min={1}
               value={duration}
               onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))}
-              style={{
-                width: 60,
-                background: '#020617',
-                border: '1px solid #1e293b',
-                borderRadius: 8,
-                padding: '4px 8px',
-                color: '#e2e8f0',
-                fontFamily: "'Geist Mono', monospace",
-                fontSize: '0.8rem',
-                outline: 'none',
-                textAlign: 'center',
-              }}
+              className="w-14 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 font-mono text-sm text-center outline-none focus:border-orange-500 transition"
             />
-            <span style={{ fontSize: '0.7rem', color: '#475569', fontFamily: "'Geist Mono', monospace" }}>days</span>
+            <span className="text-[11px] text-slate-500 font-mono">days</span>
           </div>
+
           {variants.length < MAX_VARIANTS && (
             <button
               onClick={addVariant}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'linear-gradient(135deg, #6366f120, #8b5cf620)',
-                border: '1px solid #6366f140',
-                borderRadius: 10,
-                padding: '8px 14px',
-                color: '#818cf8',
-                fontSize: '0.76rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                fontFamily: "'Space Grotesk', sans-serif",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#6366f1';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#6366f140';
-              }}
+              className="flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 hover:border-orange-500/50 rounded-lg px-3.5 py-2 text-orange-400 hover:text-orange-300 text-xs font-bold transition"
             >
-              <Plus size={13} /> Add Variant ({variants.length}/{MAX_VARIANTS})
+              <Plus className="w-3 h-3" />
+              Add variant ({variants.length}/{MAX_VARIANTS})
             </button>
           )}
         </div>
 
-        {/* VARIANTS GRID */}
+        {/* ─── DATA SANITY WARNINGS ─── */}
+        {sanityIssues.length > 0 && (
+          <div className="mb-4 bg-rose-950/20 border border-rose-500/30 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                Data quality issues ({sanityIssues.length})
+              </span>
+            </div>
+            {sanityIssues.map((iss, i) => (
+              <div key={i} className="text-xs text-rose-200/90 leading-relaxed flex gap-2">
+                <span className="font-bold text-rose-400 shrink-0">{iss.variant}:</span>
+                <span>{iss.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ─── VARIANTS GRID ─── */}
         <div
-          className="input-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              variants.length === 2
-                ? '1fr 1fr'
-                : variants.length === 3
-                ? 'repeat(3, 1fr)'
-                : 'repeat(2, 1fr)',
-            gap: 20,
-            marginBottom: 20,
-          }}
+          className={`grid gap-5 mb-5 ${
+            variants.length === 2 ? 'grid-cols-1 md:grid-cols-2'
+            : variants.length === 3 ? 'grid-cols-1 md:grid-cols-3'
+            : 'grid-cols-1 md:grid-cols-2'
+          }`}
         >
           {variants.map((v, i) => (
             <div key={v.id} className={`fade-up delay-${Math.min(i + 1, 4)}`}>
@@ -639,261 +477,143 @@ export default function ToolClient() {
           ))}
         </div>
 
-        {/* RESULTS */}
-        {primary && sc ? (
-          <div className="fade-up delay-3" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {peekingWarning && (
-              <div
-                style={{
-                  background: '#f59e0b15',
-                  border: '1px solid #f59e0b40',
-                  borderRadius: 12,
-                  padding: '12px 18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <AlertCircle size={18} color="#f59e0b" />
-                <div>
-                  <div style={{ color: '#f59e0b', fontSize: '0.78rem', fontWeight: 600, marginBottom: 2 }}>
-                    Possible early-stopping bias
-                  </div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.72rem', lineHeight: 1.5 }}>
-                    Reaching 95% with under 1,000 visitors may be a false positive. Continue running to your pre-planned
-                    sample size.
-                  </div>
-                </div>
+        {/* ─── RESULTS ─── */}
+        {primary && ss ? (
+          <div className="fade-up delay-3 flex flex-col gap-5">
+
+            {/* WARNINGS BAR */}
+            {(peekingWarning || multipleComparisonsWarning) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {peekingWarning && (
+                  <WarningCard
+                    icon={<AlertCircle className="w-4 h-4" />}
+                    tone="amber"
+                    title="Possible early-stopping bias"
+                    body="Reaching 95% with under 1,000 visitors may be a false positive. Continue running to your pre-planned sample size."
+                  />
+                )}
+                {multipleComparisonsWarning && (
+                  <WarningCard
+                    icon={<ShieldAlert className="w-4 h-4" />}
+                    tone="orange"
+                    title={`Multiple-comparisons inflation (${comparisons.length} variants)`}
+                    body={<>With {comparisons.length} variants vs control, the family-wise false-positive rate is ~{(100 * (1 - Math.pow(0.95, comparisons.length))).toFixed(1)}%. Apply Bonferroni: require <span className="font-mono font-bold">p &lt; {(bonferroniThreshold / 100).toFixed(4)}</span> per comparison.</>}
+                  />
+                )}
               </div>
             )}
 
             {/* VERDICT BANNER */}
-            <div
-              style={{
-                background: sc.bg,
-                border: `1.5px solid ${sc.border}`,
-                borderRadius: 20,
-                padding: '24px 32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 20,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-                <ConfidenceRing confidence={primary.confidence} status={primary.status} />
-                <div style={{ maxWidth: 480 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ color: sc.color }}>{verdictIcon(primary.status)}</span>
-                    <span
-                      style={{
-                        fontFamily: "'Geist Mono', monospace",
-                        fontSize: '0.65rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.15em',
-                        color: sc.color,
-                      }}
-                    >
-                      {sc.label}
-                    </span>
+            <div className={`rounded-2xl p-6 md:p-8 border ${ss.bgClass} ${ss.borderClass}`}>
+              <div className="flex items-center justify-between flex-wrap gap-5">
+                <div className="flex items-center gap-5 flex-wrap">
+                  <ConfidenceRing confidence={primary.confidence} status={primary.status} />
+                  <div className="max-w-lg">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={ss.textClass}>{verdictIcon(primary.status)}</span>
+                      <span className={`font-mono text-[11px] font-bold tracking-widest ${ss.textClass}`}>
+                        {ss.label}
+                      </span>
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold text-white leading-tight mb-2 tracking-tight">
+                      {ss.headline}
+                    </h2>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      {primary.status === 'winner'
+                        ? `Variant outperforms Control by ${primary.liftCR.toFixed(2)}% (CR) with ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Safe to ship.`
+                        : primary.status === 'loser'
+                        ? `Variant underperforms Control by ${Math.abs(primary.liftCR).toFixed(2)}% with ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Do not ship.`
+                        : primary.status === 'leaning'
+                        ? `Trending but not yet significant (${primary.confidence.toFixed(1)}% / need 95%). Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Continue the test.`
+                        : `Only ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Keep running — don't decide on this data yet.`}
+                    </p>
                   </div>
-                  <h2
-                    style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontSize: '1.5rem',
-                      fontWeight: 600,
-                      color: '#f1f5f9',
-                      lineHeight: 1.15,
-                      marginBottom: 8,
-                      letterSpacing: '-0.025em',
-                    }}
-                  >
-                    {sc.headline}
-                  </h2>
-                  <p style={{ color: '#64748b', fontSize: '0.85rem', lineHeight: 1.6 }}>
-                    {primary.status === 'winner'
-                      ? `Variant outperforms Control by ${primary.liftCR.toFixed(2)}% in conversion rate with ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Safe to ship.`
-                      : primary.status === 'loser'
-                      ? `Variant underperforms Control by ${Math.abs(primary.liftCR).toFixed(2)}% with ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Do not ship.`
-                      : primary.status === 'leaning'
-                      ? `Trending but not yet significant (${primary.confidence.toFixed(1)}% / need 95%). Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Continue the test.`
-                      : `Only ${primary.confidence.toFixed(1)}% confidence. Bayesian P(B>A) = ${primary.bayesianProb.toFixed(1)}%. Keep running — don't decide on this data yet.`}
-                  </p>
                 </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { label: 'Z-Score', value: primary.zScore.toFixed(3), note: '|z| > 1.96 = significant' },
-                  { label: 'p-value', value: primary.pValue.toFixed(4), note: 'p < 0.05 = significant' },
-                  { label: 'Bayesian P(B>A)', value: primary.bayesianProb.toFixed(1) + '%', note: '> 95% = high confidence' },
-                  {
-                    label: 'Total Sample',
-                    value: (primary.control.visitors + primary.variant.visitors).toLocaleString(),
-                    note: 'visitors combined',
-                  },
-                ].map((s) => (
-                  <div
-                    key={s.label}
-                    style={{
-                      background: '#0a0f1a',
-                      border: '1px solid #1e293b',
-                      borderRadius: 12,
-                      padding: '10px 16px',
-                      minWidth: 200,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '0.6rem',
-                        color: '#334155',
-                        fontWeight: 600,
-                        letterSpacing: '0.12em',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      {s.label}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        fontSize: '1.2rem',
-                        fontWeight: 600,
-                        color: '#e2e8f0',
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      {s.value}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.6rem',
-                        color: '#334155',
-                        marginTop: 2,
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      {s.note}
-                    </div>
-                  </div>
-                ))}
+
+                <div className="flex flex-col gap-2.5 min-w-[200px]">
+                  <StatCell label="Z-Score"           value={primary.zScore.toFixed(3)}                                            note="|z| > 1.96 = significant" />
+                  <StatCell label="p-value"           value={primary.pValue.toFixed(4)}                                            note="p < 0.05 = significant" />
+                  <StatCell label="Bayesian P(B>A)"   value={primary.bayesianProb.toFixed(1) + '%'}                                note="> 95% = high confidence" />
+                  {effectSize && (
+                    <StatCell
+                      label="Effect size (h)"
+                      value={effectSize.h.toFixed(3)}
+                      note={effectSize.label}
+                      noteClass={effectSize.tone}
+                    />
+                  )}
+                  <StatCell label="Total Sample"      value={(primary.control.visitors + primary.variant.visitors).toLocaleString()} note="visitors combined" />
+                </div>
               </div>
             </div>
 
-            {/* MULTI-VARIANT TABLE */}
+            {/* MULTI-VARIANT TABLE (with best-winner highlight) */}
             {comparisons.length > 1 && (
-              <div style={{ background: '#0a0f1a', border: '1.5px solid #1e293b', borderRadius: 16, padding: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <Sparkles size={14} color="#a78bfa" />
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.12em',
-                      color: '#94a3b8',
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
-                    ALL VARIANTS VS CONTROL
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4 flex-wrap">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-[11px] font-bold tracking-widest text-slate-400 font-mono uppercase">
+                    All variants vs control
                   </span>
+                  {bestWinner && (
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full px-2.5 py-0.5 font-bold font-mono">
+                      <Trophy className="w-3 h-3" />
+                      Best: {bestWinner.variant.name}
+                    </span>
+                  )}
                 </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr
-                        style={{
-                          color: '#475569',
-                          textAlign: 'left',
-                          fontFamily: "'Geist Mono', monospace",
-                          fontSize: '0.66rem',
-                          letterSpacing: '0.1em',
-                        }}
-                      >
-                        <th style={{ padding: '8px 12px' }}>VARIANT</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>CR</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>LIFT</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>95% CI</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>CONFIDENCE</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>P(B&gt;A)</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'center' }}>STATUS</th>
+                      <tr className="text-left text-slate-500 font-mono text-[10px] tracking-widest uppercase">
+                        <th className="px-3 py-2">Variant</th>
+                        <th className="px-3 py-2 text-right">CR</th>
+                        <th className="px-3 py-2 text-right">Lift</th>
+                        <th className="px-3 py-2 text-right">95% CI</th>
+                        <th className="px-3 py-2 text-right">Confidence</th>
+                        <th className="px-3 py-2 text-right">P(B&gt;A)</th>
+                        <th className="px-3 py-2 text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisons.map((c) => (
-                        <tr key={c.variant.id} style={{ borderTop: '1px solid #1e293b' }}>
-                          <td style={{ padding: '12px', color: '#e2e8f0', fontWeight: 500 }}>{c.variant.name}</td>
-                          <td
-                            style={{
-                              padding: '12px',
-                              textAlign: 'right',
-                              fontFamily: "'Geist Mono', monospace",
-                              color: '#cbd5e1',
-                            }}
+                      {comparisons.map((c) => {
+                        const isBest = bestWinner && c.variant.id === bestWinner.variant.id;
+                        const cs = STATUS_STYLES[c.status];
+                        return (
+                          <tr
+                            key={c.variant.id}
+                            className={`border-t border-slate-800 ${isBest ? 'bg-emerald-500/5' : 'hover:bg-slate-800/30'} transition`}
                           >
-                            {(c.variant.cr * 100).toFixed(2)}%
-                          </td>
-                          <td
-                            style={{
-                              padding: '12px',
-                              textAlign: 'right',
-                              fontFamily: "'Geist Mono', monospace",
-                              color: c.liftCR > 0 ? '#10b981' : c.liftCR < 0 ? '#ef4444' : '#475569',
-                            }}
-                          >
-                            {c.liftCR > 0 ? '+' : ''}
-                            {c.liftCR.toFixed(2)}%
-                          </td>
-                          <td
-                            style={{
-                              padding: '12px',
-                              textAlign: 'right',
-                              fontFamily: "'Geist Mono', monospace",
-                              color: '#64748b',
-                              fontSize: '0.74rem',
-                            }}
-                          >
-                            [{c.ciLow.toFixed(1)}%, {c.ciHigh.toFixed(1)}%]
-                          </td>
-                          <td
-                            style={{
-                              padding: '12px',
-                              textAlign: 'right',
-                              fontFamily: "'Geist Mono', monospace",
-                              color: c.confidence >= 95 ? '#10b981' : c.confidence >= 80 ? '#f59e0b' : '#475569',
-                            }}
-                          >
-                            {c.confidence.toFixed(1)}%
-                          </td>
-                          <td
-                            style={{
-                              padding: '12px',
-                              textAlign: 'right',
-                              fontFamily: "'Geist Mono', monospace",
-                              color: '#a78bfa',
-                            }}
-                          >
-                            {c.bayesianProb.toFixed(1)}%
-                          </td>
-                          <td style={{ padding: '12px', textAlign: 'center' }}>
-                            <span
-                              style={{
-                                background: STATUS_CONFIG[c.status].bg,
-                                color: STATUS_CONFIG[c.status].color,
-                                padding: '3px 10px',
-                                borderRadius: 99,
-                                fontSize: '0.62rem',
-                                fontWeight: 600,
-                                letterSpacing: '0.08em',
-                                border: `1px solid ${STATUS_CONFIG[c.status].border}`,
-                                fontFamily: "'Geist Mono', monospace",
-                              }}
-                            >
-                              {STATUS_CONFIG[c.status].label.replace('CHALLENGER ', '')}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                            <td className="px-3 py-3 text-slate-100 font-medium">
+                              <div className="flex items-center gap-2">
+                                {isBest && <Trophy className="w-3.5 h-3.5 text-emerald-400" />}
+                                {c.variant.name}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-slate-300">
+                              {(c.variant.cr * 100).toFixed(2)}%
+                            </td>
+                            <td className={`px-3 py-3 text-right font-mono ${c.liftCR > 0 ? 'text-emerald-400' : c.liftCR < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                              {c.liftCR > 0 ? '+' : ''}{c.liftCR.toFixed(2)}%
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-slate-500 text-xs">
+                              [{c.ciLow.toFixed(1)}%, {c.ciHigh.toFixed(1)}%]
+                            </td>
+                            <td className={`px-3 py-3 text-right font-mono ${c.confidence >= 95 ? 'text-emerald-400' : c.confidence >= 80 ? 'text-amber-400' : 'text-slate-500'}`}>
+                              {c.confidence.toFixed(1)}%
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-orange-400">
+                              {c.bayesianProb.toFixed(1)}%
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider border font-mono ${cs.bgClass} ${cs.borderClass} ${cs.textClass}`}>
+                                {cs.label.split(' · ')[0]}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -901,157 +621,32 @@ export default function ToolClient() {
             )}
 
             {/* METRICS ROW */}
-            <div className="metrics-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-              {/* CR */}
-              <div
-                className="metric-card"
-                style={{
-                  background: '#0a0f1a',
-                  border: '1.5px solid #1e293b',
-                  borderRadius: 16,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 16,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <MousePointerClick size={14} color="#6366f1" />
-                    <span
-                      style={{
-                        fontSize: '0.65rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.1em',
-                        color: '#334155',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      CONVERSION RATE
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      background: primary.liftCR > 0 ? '#10b98115' : '#ef444415',
-                      color: primary.liftCR > 0 ? '#10b981' : '#ef4444',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      padding: '3px 10px',
-                      borderRadius: 99,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 3,
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
-                    {primary.liftCR > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-                    {primary.liftCR > 0 ? '+' : ''}
-                    {primary.liftCR.toFixed(2)}%
-                  </span>
-                </div>
-                <CompareBar
-                  rows={[
-                    { label: 'A · CONTROL', value: primary.control.cr * 100, color: '#64748b' },
-                    { label: 'B · VARIANT', value: primary.variant.cr * 100, color: '#6366f1' },
-                  ]}
-                  format={(n) => n.toFixed(2) + '%'}
-                />
-              </div>
-
-              {/* RPV */}
-              <div
-                className="metric-card"
-                style={{
-                  background: '#0a0f1a',
-                  border: '1.5px solid #1e293b',
-                  borderRadius: 16,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 16,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <DollarSign size={14} color="#10b981" />
-                    <span
-                      style={{
-                        fontSize: '0.65rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.1em',
-                        color: '#334155',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      REVENUE / VISITOR
-                    </span>
-                  </div>
-                  {primary.control.rpv > 0 || primary.variant.rpv > 0 ? (
-                    <span
-                      style={{
-                        background:
-                          primary.liftRPV > 0
-                            ? '#10b98115'
-                            : primary.liftRPV < 0
-                            ? '#ef444415'
-                            : '#1e293b',
-                        color:
-                          primary.liftRPV > 0 ? '#10b981' : primary.liftRPV < 0 ? '#ef4444' : '#475569',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        padding: '3px 10px',
-                        borderRadius: 99,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3,
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      {primary.liftRPV > 0 ? (
-                        <ArrowUpRight size={11} />
-                      ) : primary.liftRPV < 0 ? (
-                        <ArrowDownRight size={11} />
-                      ) : (
-                        <Minus size={11} />
-                      )}
-                      {primary.liftRPV !== 0
-                        ? (primary.liftRPV > 0 ? '+' : '') + primary.liftRPV.toFixed(2) + '%'
-                        : 'N/A'}
-                    </span>
-                  ) : (
-                    <span
-                      style={{ fontSize: '0.65rem', color: '#334155', fontFamily: "'Geist Mono', monospace" }}
-                    >
-                      Add revenue
-                    </span>
-                  )}
-                </div>
-                {primary.control.rpv === 0 && primary.variant.rpv === 0 ? (
-                  <div
-                    style={{
-                      height: 80,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#1e293b',
-                      fontSize: '0.75rem',
-                      textAlign: 'center',
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Enter revenue data
-                    <br />
-                    to unlock RPV analysis
-                  </div>
-                ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <MetricCard
+                icon={<MousePointerClick className="w-3.5 h-3.5 text-orange-400" />}
+                label="Conversion rate"
+                primary={primary}
+                liftValue={primary.liftCR}
+                hasData={primary.control.cr > 0 || primary.variant.cr > 0}
+                emptyText="Add visitor & conversion data"
+                bar={
+                  <CompareBar
+                    rows={[
+                      { label: 'A · CONTROL', value: primary.control.cr * 100, color: '#64748b' },
+                      { label: 'B · VARIANT', value: primary.variant.cr * 100, color: '#f97316' },
+                    ]}
+                    format={(n) => n.toFixed(2) + '%'}
+                  />
+                }
+              />
+              <MetricCard
+                icon={<DollarSign className="w-3.5 h-3.5 text-emerald-400" />}
+                label="Revenue / visitor"
+                primary={primary}
+                liftValue={primary.liftRPV}
+                hasData={primary.control.rpv > 0 || primary.variant.rpv > 0}
+                emptyText="Enter revenue data to unlock RPV"
+                bar={
                   <CompareBar
                     rows={[
                       { label: 'A · CONTROL', value: primary.control.rpv, color: '#64748b' },
@@ -1059,99 +654,16 @@ export default function ToolClient() {
                     ]}
                     format={(n) => '$' + n.toFixed(2)}
                   />
-                )}
-              </div>
-
-              {/* AOV */}
-              <div
-                className="metric-card"
-                style={{
-                  background: '#0a0f1a',
-                  border: '1.5px solid #1e293b',
-                  borderRadius: 16,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 16,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BarChart size={14} color="#f59e0b" />
-                    <span
-                      style={{
-                        fontSize: '0.65rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.1em',
-                        color: '#334155',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      AVG. ORDER VALUE
-                    </span>
-                  </div>
-                  {primary.control.aov > 0 || primary.variant.aov > 0 ? (
-                    <span
-                      style={{
-                        background:
-                          primary.liftAOV > 0
-                            ? '#f59e0b15'
-                            : primary.liftAOV < 0
-                            ? '#ef444415'
-                            : '#1e293b',
-                        color:
-                          primary.liftAOV > 0 ? '#f59e0b' : primary.liftAOV < 0 ? '#ef4444' : '#475569',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        padding: '3px 10px',
-                        borderRadius: 99,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3,
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
-                      {primary.liftAOV > 0 ? (
-                        <ArrowUpRight size={11} />
-                      ) : primary.liftAOV < 0 ? (
-                        <ArrowDownRight size={11} />
-                      ) : (
-                        <Minus size={11} />
-                      )}
-                      {primary.liftAOV !== 0
-                        ? (primary.liftAOV > 0 ? '+' : '') + primary.liftAOV.toFixed(2) + '%'
-                        : 'N/A'}
-                    </span>
-                  ) : (
-                    <span
-                      style={{ fontSize: '0.65rem', color: '#334155', fontFamily: "'Geist Mono', monospace" }}
-                    >
-                      Add revenue
-                    </span>
-                  )}
-                </div>
-                {primary.control.aov === 0 && primary.variant.aov === 0 ? (
-                  <div
-                    style={{
-                      height: 80,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#1e293b',
-                      fontSize: '0.75rem',
-                      textAlign: 'center',
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Enter revenue data
-                    <br />
-                    to unlock AOV analysis
-                  </div>
-                ) : (
+                }
+              />
+              <MetricCard
+                icon={<BarChart className="w-3.5 h-3.5 text-amber-400" />}
+                label="Avg. order value"
+                primary={primary}
+                liftValue={primary.liftAOV}
+                hasData={primary.control.aov > 0 || primary.variant.aov > 0}
+                emptyText="Enter revenue data to unlock AOV"
+                bar={
                   <CompareBar
                     rows={[
                       { label: 'A · CONTROL', value: primary.control.aov, color: '#64748b' },
@@ -1159,305 +671,123 @@ export default function ToolClient() {
                     ]}
                     format={(n) => '$' + n.toFixed(2)}
                   />
-                )}
-              </div>
+                }
+              />
             </div>
 
-            {/* CONFIDENCE + PROJECTED */}
-            <div className="results-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-              <div style={{ background: '#0a0f1a', border: '1.5px solid #1e293b', borderRadius: 16, padding: 24 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 20,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: '0.66rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.12em',
-                      color: '#334155',
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
-                    CONFIDENCE LEVEL BREAKDOWN
+            {/* CONFIDENCE + PROJECTED IMPACT */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex justify-between items-center mb-5">
+                  <span className="text-[11px] font-bold tracking-widest text-slate-500 font-mono uppercase">
+                    Confidence level breakdown
                   </span>
                   <span
-                    style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontWeight: 600,
-                      fontSize: '1rem',
-                      color:
-                        primary.confidence >= 95
-                          ? '#10b981'
-                          : primary.confidence >= 80
-                          ? '#f59e0b'
-                          : '#475569',
-                      letterSpacing: '-0.02em',
-                    }}
+                    className={`text-base font-bold ${
+                      primary.confidence >= 95 ? 'text-emerald-400'
+                      : primary.confidence >= 80 ? 'text-amber-400'
+                      : 'text-slate-500'
+                    }`}
                   >
                     <AnimatedNumber value={primary.confidence} decimals={1} suffix="%" />
                   </span>
                 </div>
-                <div
-                  style={{
-                    position: 'relative',
-                    height: 16,
-                    background: '#0f172a',
-                    borderRadius: 99,
-                    overflow: 'hidden',
-                    marginBottom: 10,
-                  }}
-                >
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
-                    <div style={{ width: '80%', borderRight: '1px dashed #1e293b' }} />
-                    <div style={{ width: '15%', borderRight: '1px dashed #334155' }} />
+
+                <div className="relative h-4 bg-slate-950 rounded-full overflow-hidden mb-2.5 border border-slate-800">
+                  {/* Zone dividers */}
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    <div className="w-[80%] border-r border-dashed border-slate-700" />
+                    <div className="w-[15%] border-r border-dashed border-slate-600" />
                   </div>
                   <div
-                    style={{
-                      height: '100%',
-                      borderRadius: 99,
-                      background:
-                        primary.confidence >= 95
-                          ? 'linear-gradient(90deg,#6366f1,#10b981)'
-                          : primary.confidence >= 80
-                          ? 'linear-gradient(90deg,#6366f1,#f59e0b)'
-                          : '#334155',
-                      width: `${primary.confidence}%`,
-                      transition: 'width 1.2s cubic-bezier(0.22,1,0.36,1)',
-                      position: 'relative',
-                      zIndex: 1,
-                      boxShadow:
-                        primary.confidence >= 95 ? '0 0 16px rgba(16,185,129,0.4)' : 'none',
-                    }}
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      primary.confidence >= 95
+                        ? 'bg-gradient-to-r from-orange-500 to-emerald-500 shadow-lg shadow-emerald-500/30'
+                        : primary.confidence >= 80
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500'
+                        : 'bg-slate-700'
+                    }`}
+                    style={{ width: `${primary.confidence}%` }}
                   />
                 </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '0.6rem',
-                    color: '#334155',
-                    fontFamily: "'Geist Mono', monospace",
-                  }}
-                >
+
+                <div className="flex justify-between text-[10px] text-slate-500 font-mono">
                   <span>0%</span>
-                  <span style={{ color: '#475569' }}>80% (Leaning)</span>
-                  <span style={{ color: primary.confidence >= 95 ? '#10b981' : '#475569' }}>95% ← Target</span>
+                  <span className="text-slate-400">80% (Leaning)</span>
+                  <span className={primary.confidence >= 95 ? 'text-emerald-400' : 'text-slate-400'}>95% ← Target</span>
                   <span>100%</span>
                 </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3,1fr)',
-                    gap: 8,
-                    marginTop: 16,
-                  }}
-                >
-                  {[
-                    { range: '0 – 80%', label: 'Inconclusive', color: '#334155' },
-                    { range: '80 – 95%', label: 'Leaning', color: '#f59e0b' },
-                    { range: '95 – 100%', label: 'Significant', color: '#10b981' },
-                  ].map((z) => (
-                    <div
-                      key={z.range}
-                      style={{
-                        background: '#0f172a',
-                        borderRadius: 10,
-                        padding: '8px 12px',
-                        borderLeft: `3px solid ${z.color}`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily: "'Geist Mono', monospace",
-                          color: z.color,
-                          fontSize: '0.62rem',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {z.range}
-                      </div>
-                      <div
-                        style={{
-                          color: '#334155',
-                          fontSize: '0.62rem',
-                          marginTop: 2,
-                          fontFamily: "'Geist Mono', monospace",
-                        }}
-                      >
-                        {z.label}
-                      </div>
-                    </div>
-                  ))}
+
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  <ZoneBox range="0 – 80%"    label="Inconclusive" color="bg-slate-500"  textColor="text-slate-500" />
+                  <ZoneBox range="80 – 95%"   label="Leaning"      color="bg-amber-500"   textColor="text-amber-400" />
+                  <ZoneBox range="95 – 100%"  label="Significant"  color="bg-emerald-500" textColor="text-emerald-400" />
                 </div>
               </div>
 
-              <div style={{ background: '#0a0f1a', border: '1.5px solid #1e293b', borderRadius: 16, padding: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-                  <Zap size={14} color="#f59e0b" />
-                  <span
-                    style={{
-                      fontSize: '0.66rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.12em',
-                      color: '#334155',
-                      fontFamily: "'Geist Mono', monospace",
-                    }}
-                  >
-                    30-DAY IMPACT
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[11px] font-bold tracking-widest text-slate-500 font-mono uppercase">
+                    30-Day Impact
                   </span>
                 </div>
                 {primary.control.rpv > 0 ? (
                   <>
-                    <div style={{ marginBottom: 16 }}>
-                      <div
-                        style={{
-                          fontSize: '0.7rem',
-                          color: '#334155',
-                          marginBottom: 6,
-                          fontFamily: "'Geist Mono', monospace",
-                        }}
-                      >
-                        Projected Monthly Rev. Lift
+                    <div className="mb-4">
+                      <div className="text-[11px] text-slate-500 mb-1.5 font-mono">
+                        Projected monthly rev. lift
                       </div>
-                      <div
-                        style={{
-                          fontFamily: "'Space Grotesk', sans-serif",
-                          fontSize: '1.9rem',
-                          fontWeight: 600,
-                          color: primary.monthlyRevLift >= 0 ? '#10b981' : '#ef4444',
-                          lineHeight: 1,
-                          letterSpacing: '-0.03em',
-                        }}
-                      >
-                        {primary.monthlyRevLift >= 0 ? '+' : '−'}$
-                        <AnimatedNumber value={Math.abs(primary.monthlyRevLift)} decimals={0} />
+                      <div className={`text-3xl font-bold leading-none tracking-tight ${primary.monthlyRevLift >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {primary.monthlyRevLift >= 0 ? '+' : '−'}$<AnimatedNumber value={Math.abs(primary.monthlyRevLift)} decimals={0} />
                       </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: '0.68rem',
-                        color: '#334155',
-                        lineHeight: 1.6,
-                        background: '#0f172a',
-                        borderRadius: 10,
-                        padding: '10px 12px',
-                        fontFamily: "'Geist Mono', monospace",
-                      }}
-                    >
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[11px] text-slate-500 leading-relaxed font-mono">
                       Based on {duration}-day test → 30-day projection. Assumes stable traffic and ship-to-100%.
                     </div>
                   </>
                 ) : (
-                  <div
-                    style={{
-                      height: 100,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#1e293b',
-                      fontSize: '0.75rem',
-                      textAlign: 'center',
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Add revenue data
-                    <br />
-                    to see projected impact
+                  <div className="h-24 flex items-center justify-center text-slate-600 text-xs text-center leading-relaxed">
+                    Add revenue data<br />to see projected impact
                   </div>
                 )}
               </div>
             </div>
           </div>
         ) : (
-          <div
-            className="fade-up delay-3"
-            style={{
-              background: '#0a0f1a',
-              border: '1.5px dashed #1e293b',
-              borderRadius: 20,
-              padding: 64,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 16,
-            }}
-          >
-            <div style={{ background: '#0f172a', borderRadius: 16, padding: 20 }}>
-              <BarChart2 size={36} color="#1e293b" />
+          <div className={`${loaded ? 'fade-up delay-3' : ''} bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-16 flex flex-col items-center justify-center gap-4`}>
+            <div className="bg-slate-950 rounded-2xl p-5 border border-slate-800">
+              <BarChart2 className="w-9 h-9 text-slate-700" />
             </div>
-            <p
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontWeight: 500,
-                color: '#475569',
-                fontSize: '1rem',
-                letterSpacing: '-0.01em',
-              }}
-            >
+            <p className="font-medium text-slate-400 text-base tracking-tight">
               Enter visitor data above to run the statistical engine
             </p>
-            <p style={{ color: '#334155', fontSize: '0.78rem', fontFamily: "'Geist Mono', monospace" }}>
+            <p className="text-slate-600 text-xs font-mono">
               Results update in real-time as you type
             </p>
           </div>
         )}
 
-        <div className="fade-up delay-4" style={{ marginTop: 20 }}>
+        <div className={`${loaded ? 'fade-up delay-4' : ''} mt-5`}>
           <SampleSizeCalc />
         </div>
 
         <MethodologyGuide />
 
-        {/* FOOTER */}
-        <div
-          style={{
-            marginTop: 56,
-            paddingTop: 28,
-            borderTop: '1px solid #0f172a',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <p
-            style={{
-              fontSize: '0.7rem',
-              color: '#1e293b',
-              fontWeight: 600,
-              letterSpacing: '0.15em',
-              fontFamily: "'Geist Mono', monospace",
-            }}
-          >
+        {/* ─── CREATOR FOOTER ─── */}
+        <div className="mt-14 pt-8 border-t border-slate-800 flex flex-col items-center gap-3">
+          <p className="text-[11px] text-slate-600 font-bold tracking-[0.2em] font-mono">
             CREATED BY SMARTRWL
           </p>
-          <div style={{ display: 'flex', gap: 16 }}>
+          <div className="flex gap-4">
             <a
               href="http://www.instagram.com/smartrwl"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"
-              style={{ color: '#334155', transition: 'color 0.2s' }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = '#ec4899')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = '#334155')}
+              className="text-slate-600 hover:text-pink-500 transition-colors"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
                 <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
                 <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
@@ -1468,27 +798,153 @@ export default function ToolClient() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub"
-              style={{ color: '#334155', transition: 'color 0.2s' }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = '#f1f5f9')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = '#334155')}
+              className="text-slate-600 hover:text-white transition-colors"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
               </svg>
             </a>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════
+   SUB-COMPONENTS
+═════════════════════════════════════════════ */
+
+function InfoBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-right">
+      <div className="text-[10px] text-slate-600 font-bold tracking-widest font-mono">{label}</div>
+      <div className="font-mono text-orange-400 text-xs font-medium mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function ActionButton({
+  onClick, icon, label, accent, disabled,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  accent: 'orange' | 'emerald' | 'rose';
+  disabled?: boolean;
+}) {
+  const hover = {
+    orange:  'hover:border-orange-500/50 hover:text-orange-400',
+    emerald: 'hover:border-emerald-500/50 hover:text-emerald-400',
+    rose:    'hover:border-rose-500/50 hover:text-rose-400',
+  }[accent];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3.5 py-2 text-slate-500 text-xs font-medium transition disabled:opacity-30 disabled:cursor-not-allowed ${disabled ? '' : hover}`}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+function StatCell({
+  label, value, note, noteClass,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  noteClass?: string;
+}) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 min-w-[200px]">
+      <div className="text-[10px] text-slate-600 font-bold tracking-widest font-mono uppercase">
+        {label}
+      </div>
+      <div className="text-lg font-bold text-slate-100 leading-tight tracking-tight">
+        {value}
+      </div>
+      <div className={`text-[10px] mt-0.5 font-mono ${noteClass ?? 'text-slate-600'}`}>
+        {note}
+      </div>
+    </div>
+  );
+}
+
+function WarningCard({
+  icon, tone, title, body,
+}: {
+  icon: React.ReactNode;
+  tone: 'amber' | 'orange';
+  title: string;
+  body: React.ReactNode;
+}) {
+  const config = {
+    amber:  { bg: 'bg-amber-950/20',  border: 'border-amber-500/30',  text: 'text-amber-300',  body: 'text-amber-200/80' },
+    orange: { bg: 'bg-orange-950/20', border: 'border-orange-500/30', text: 'text-orange-300', body: 'text-orange-200/80' },
+  }[tone];
+  return (
+    <div className={`${config.bg} ${config.border} border rounded-xl px-4 py-3 flex items-start gap-3`}>
+      <span className={config.text}>{icon}</span>
+      <div>
+        <div className={`${config.text} text-xs font-bold mb-1`}>{title}</div>
+        <div className={`${config.body} text-xs leading-relaxed`}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  icon, label, primary, liftValue, hasData, emptyText, bar,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  primary: ComparisonMetrics;
+  liftValue: number;
+  hasData: boolean;
+  emptyText: string;
+  bar: React.ReactNode;
+}) {
+  const liftColor =
+    liftValue > 0 ? 'bg-emerald-500/15 text-emerald-400'
+    : liftValue < 0 ? 'bg-rose-500/15 text-rose-400'
+    : 'bg-slate-800 text-slate-500';
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 hover:-translate-y-0.5 transition-all">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-[10px] font-bold tracking-widest text-slate-500 font-mono uppercase">
+            {label}
+          </span>
+        </div>
+        {hasData ? (
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 font-mono ${liftColor}`}>
+            {liftValue > 0 ? <ArrowUpRight className="w-3 h-3" /> : liftValue < 0 ? <ArrowDownRight className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
+            {liftValue !== 0 ? (liftValue > 0 ? '+' : '') + liftValue.toFixed(2) + '%' : 'N/A'}
+          </span>
+        ) : (
+          <span className="text-[10px] text-slate-600 font-mono">Add revenue</span>
+        )}
+      </div>
+      {hasData ? bar : (
+        <div className="h-20 flex items-center justify-center text-slate-700 text-xs text-center leading-relaxed">
+          {emptyText}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZoneBox({
+  range, label, color, textColor,
+}: { range: string; label: string; color: string; textColor: string }) {
+  return (
+    <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 border-l-[3px]" style={{ borderLeftColor: color.replace('bg-', '#') }}>
+      <div className={`${textColor} font-mono text-[10px] font-medium`}>{range}</div>
+      <div className="text-slate-600 text-[10px] mt-0.5 font-mono">{label}</div>
     </div>
   );
 }
