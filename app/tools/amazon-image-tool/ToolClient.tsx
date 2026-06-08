@@ -599,7 +599,7 @@ export default function BulkAssetManager() {
                 ></iframe>
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                Learn how the tool automates your asset renaming process. Swap <code className="text-slate-300">qmEN7HVFQ2s?si=TeTTkcGbgqMJVCa8</code> with your video identifier in the source code to link your upload.
+                See the Bulk Asset Command Center in action and learn how to replicate master images across hundreds of ASINs using Amazon's naming conventions. Follow the complete workflow, best practices, and real-world use cases step by step.
               </p>
             </div>
 
@@ -622,7 +622,7 @@ export default function BulkAssetManager() {
                 ></iframe>
               </div>
               <p className="mt-3 text-xs text-slate-500">
-                Listen to our podcast episode covering FBA automation, bulk workflows, and listing strategies.
+                Prefer audio? Tune in to the Smart Seller Academy podcast for tool breakdowns, practical strategies, and expert insights you can apply to your marketplace operations immediately.
               </p>
             </div>
           </div>
