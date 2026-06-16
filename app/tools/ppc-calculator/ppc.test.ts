@@ -1,364 +1,333 @@
-// ppc.test.ts
+// lib/ppc-calculations.ts
 //
-// Adjust this import path to wherever you placed the calculations file.
-// If your project uses path aliases configured in tsconfig.json + vitest.config.ts,
-// you can also use: import { ... } from '@/lib/ppc-calculations'
-import { describe, it, expect } from 'vitest';
-import {
-  safeNum,
-  calculateAcos,
-  calculateRoas,
-  calculateTacos,
-  calculateMarginPct,
-  calculateStatus,
-  calculateMetrics,
-  calculateScaleProjection,
-  generateInsights,
-  ACOS_INFINITE,
-  type CampaignInputs,
-} from '@/lib/ppc-calculations';
+// Pure math + insight generation for the Ad Profitability Engine.
+// No React, no DOM, no fetch — easy to test, easy to reuse.
 
-const baseline: CampaignInputs = {
-  adSpend: 5000,
-  adSales: 15000,
-  totalSales: 45000,
-  cpc: 15,
-  sellingPrice: 1000,
-  landedCost: 400,
-  targetProfitMargin: 10,
-};
+/* ─────────────────────────────────────────────
+   CONSTANTS
+───────────────────────────────────────────── */
 
-// ===========================================================================
-// safeNum
-// ===========================================================================
-describe('safeNum', () => {
-  it('parses valid number strings', () => {
-    expect(safeNum('100')).toBe(100);
-    expect(safeNum('0.5')).toBe(0.5);
-  });
+/** Sentinel ACOS value representing "spent money, zero sales".
+ *  We use a large finite number (not Infinity) so it still passes
+ *  Number.isFinite checks and serializes cleanly. */
+export const ACOS_INFINITE = 99999;
 
-  it('returns 0 for empty / dash strings', () => {
-    expect(safeNum('')).toBe(0);
-    expect(safeNum('-')).toBe(0);
-  });
+/** Default share of sales lost per doubling of ad spend (12%).
+ *  Reflects high-intent keyword exhaustion in mature PPC accounts. */
+export const DEFAULT_SCALE_DECAY = 0.12;
 
-  it('returns 0 for non-numeric input', () => {
-    expect(safeNum('abc')).toBe(0);
-    expect(safeNum(NaN)).toBe(0);
-  });
+/* ─────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────── */
 
-  it('returns 0 for Infinity', () => {
-    expect(safeNum(Infinity)).toBe(0);
-    expect(safeNum(-Infinity)).toBe(0);
-  });
+export type Preset = 'growth' | 'balanced' | 'profit';
 
-  it('clamps negative values to 0', () => {
-    expect(safeNum(-100)).toBe(0);
-    expect(safeNum('-50')).toBe(0);
-  });
+export type CampaignStatus = 'profitable' | 'break-even' | 'loss' | 'critical';
 
-  it('passes through positive numbers', () => {
-    expect(safeNum(42)).toBe(42);
-    expect(safeNum(0)).toBe(0);
-  });
-});
+export type InsightType = 'success' | 'warning' | 'danger' | 'info';
 
-// ===========================================================================
-// calculateAcos
-// ===========================================================================
-describe('calculateAcos', () => {
-  it('calculates ACOS as spend / sales × 100', () => {
-    expect(calculateAcos(100, 500)).toBe(20);
-    expect(calculateAcos(5000, 15000)).toBeCloseTo(33.33, 2);
-  });
+export interface CampaignInputs {
+  adSpend: number;
+  adSales: number;
+  totalSales: number;
+  cpc: number;
+  sellingPrice: number;
+  landedCost: number;
+  targetProfitMargin: number;
+}
 
-  it('returns ACOS_INFINITE when revenue is 0 but spend exists', () => {
-    // This is the bug-fix that wasn't in the original: spending money with
-    // zero sales is NOT 0% ACOS — it's catastrophic.
-    expect(calculateAcos(100, 0)).toBe(ACOS_INFINITE);
-  });
+export interface Metrics {
+  acos: number;
+  roas: number;
+  tacos: number;
+  marginPct: number;
+  breakEvenAcos: number;
+  targetAcos: number;
+  orders: number;
+  clicks: number;
+  clicksToSale: number;
+  conversionRate: number;
+  netAdProfit: number;
+  maxSafeBid: number;
+  goldenBid: number;
+  cpa: number;
+  status: CampaignStatus;
+}
 
-  it('returns 0 when both spend and revenue are 0', () => {
-    expect(calculateAcos(0, 0)).toBe(0);
-  });
+export interface ScaleProjection {
+  mult: number;
+  spend: number;
+  sales: number;
+  profit: number;
+  conversionRate: number;
+}
 
-  it('returns 0 when spend is 0 but revenue exists', () => {
-    expect(calculateAcos(0, 1000)).toBe(0);
-  });
-});
+export interface Insight {
+  type: InsightType;
+  text: string;
+}
 
-// ===========================================================================
-// calculateRoas
-// ===========================================================================
-describe('calculateRoas', () => {
-  it('calculates ROAS as sales / spend', () => {
-    expect(calculateRoas(1000, 4000)).toBe(4);
-    expect(calculateRoas(5000, 15000)).toBe(3);
-  });
+/* ─────────────────────────────────────────────
+   SANITIZER
+───────────────────────────────────────────── */
 
-  it('returns 0 when spend is 0', () => {
-    expect(calculateRoas(0, 1000)).toBe(0);
-  });
-});
+/** Coerce any input to a finite, non-negative number. Returns 0 for
+ *  empty strings, dashes, NaN, Infinity, and negative values. */
+export function safeNum(v: unknown): number {
+  if (typeof v === 'string') {
+    const trimmed = v.trim();
+    if (trimmed === '' || trimmed === '-') return 0;
+  }
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  return n;
+}
 
-// ===========================================================================
-// calculateTacos
-// ===========================================================================
-describe('calculateTacos', () => {
-  it('calculates TACoS correctly', () => {
-    expect(calculateTacos(5000, 45000)).toBeCloseTo(11.11, 2);
-  });
+/* ─────────────────────────────────────────────
+   INDIVIDUAL METRICS
+───────────────────────────────────────────── */
 
-  it('returns 0 when total sales is 0', () => {
-    expect(calculateTacos(1000, 0)).toBe(0);
-  });
-});
+/** ACOS = (spend / sales) × 100. Returns ACOS_INFINITE when spend > 0
+ *  but sales = 0 (catastrophic case — spending with zero return). */
+export function calculateAcos(spend: number, sales: number): number {
+  if (spend === 0) return 0;
+  if (sales === 0) return ACOS_INFINITE;
+  return (spend / sales) * 100;
+}
 
-// ===========================================================================
-// calculateMarginPct
-// ===========================================================================
-describe('calculateMarginPct', () => {
-  it('calculates margin percentage correctly', () => {
-    expect(calculateMarginPct(1000, 400)).toBe(60);
-    expect(calculateMarginPct(100, 80)).toBe(20);
-  });
+/** ROAS = sales / spend. Returns 0 when spend is 0. */
+export function calculateRoas(spend: number, sales: number): number {
+  if (spend === 0) return 0;
+  return sales / spend;
+}
 
-  it('returns 0 when selling price is 0', () => {
-    expect(calculateMarginPct(0, 0)).toBe(0);
-    expect(calculateMarginPct(0, 100)).toBe(0);
-  });
+/** TACoS = (ad spend / total sales) × 100. Total-account ad efficiency. */
+export function calculateTacos(spend: number, totalSales: number): number {
+  if (totalSales === 0) return 0;
+  return (spend / totalSales) * 100;
+}
 
-  it('returns negative margin when cost exceeds price (loss-leader)', () => {
-    expect(calculateMarginPct(100, 150)).toBe(-50);
-  });
-});
+/** Gross margin %. Can return negative (loss-leader). */
+export function calculateMarginPct(price: number, cost: number): number {
+  if (price === 0) return 0;
+  return ((price - cost) / price) * 100;
+}
 
-// ===========================================================================
-// calculateStatus
-// ===========================================================================
-describe('calculateStatus', () => {
-  it('returns profitable when ACOS is well below break-even', () => {
-    expect(calculateStatus(20, 60)).toBe('profitable');
-  });
+/** Status with proportional tolerance band: ±15% of break-even, minimum 2pp.
+ *  - profitable: ACOS ≤ (breakEven − tolerance)
+ *  - break-even: (breakEven − tolerance) < ACOS ≤ breakEven
+ *  - loss:       breakEven < ACOS ≤ breakEven + 15
+ *  - critical:   ACOS > breakEven + 15 */
+export function calculateStatus(
+  acos: number,
+  breakEven: number,
+): CampaignStatus {
+  const tolerance = Math.max(breakEven * 0.15, 2);
+  const lowerBound = breakEven - tolerance;
+  const upperBound = breakEven;
+  const criticalThreshold = breakEven + 15;
 
-  it('returns break-even when ACOS is just below break-even', () => {
-    // breakEven 60, tolerance = max(60*0.15, 2) = 9, so 51 < x <= 60 is break-even
-    expect(calculateStatus(55, 60)).toBe('break-even');
-  });
+  if (acos > criticalThreshold) return 'critical';
+  if (acos > upperBound) return 'loss';
+  if (acos > lowerBound) return 'break-even';
+  return 'profitable';
+}
 
-  it('returns loss when ACOS exceeds break-even', () => {
-    expect(calculateStatus(65, 60)).toBe('loss');
-  });
+/* ─────────────────────────────────────────────
+   FULL METRICS
+───────────────────────────────────────────── */
 
-  it('returns critical when ACOS overshoots break-even by 15+', () => {
-    expect(calculateStatus(80, 60)).toBe('critical');
-  });
+export function calculateMetrics(inputs: CampaignInputs): Metrics {
+  const acos = calculateAcos(inputs.adSpend, inputs.adSales);
+  const roas = calculateRoas(inputs.adSpend, inputs.adSales);
+  const tacos = calculateTacos(inputs.adSpend, inputs.totalSales);
+  const marginPct = calculateMarginPct(inputs.sellingPrice, inputs.landedCost);
 
-  it('enforces minimum 2pp tolerance for thin margins', () => {
-    // breakEven 10, proportional tolerance would be 1.5pp, but we clamp at 2pp
-    // So ACOS 8.5 should be break-even (10 - 2 = 8, and 8.5 > 8)
-    expect(calculateStatus(8.5, 10)).toBe('break-even');
-    // ACOS 7 should be profitable
-    expect(calculateStatus(7, 10)).toBe('profitable');
-  });
-});
+  // Floor at 0 for negative-margin (loss-leader) products
+  const breakEvenAcos = Math.max(marginPct, 0);
+  // Floor at 0 when desired margin exceeds gross margin
+  const targetAcos = Math.max(breakEvenAcos - inputs.targetProfitMargin, 0);
 
-// ===========================================================================
-// calculateMetrics — full integration
-// ===========================================================================
-describe('calculateMetrics', () => {
-  it('computes every metric correctly for baseline inputs', () => {
-    const m = calculateMetrics(baseline);
+  const orders = inputs.sellingPrice > 0 ? inputs.adSales / inputs.sellingPrice : 0;
+  const clicks = inputs.cpc > 0 ? inputs.adSpend / inputs.cpc : 0;
+  const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
+  const clicksToSale = orders > 0 ? Math.round(clicks / orders) : 0;
+  const cpa = orders > 0 ? inputs.adSpend / orders : 0;
 
-    expect(m.acos).toBeCloseTo(33.33, 1);
-    expect(m.roas).toBe(3);
-    expect(m.tacos).toBeCloseTo(11.11, 1);
-    expect(m.marginPct).toBe(60);
-    expect(m.breakEvenAcos).toBe(60);
-    expect(m.targetAcos).toBe(50);
-    expect(m.orders).toBe(15);
-    expect(m.clicks).toBeCloseTo(333.33, 1);
-    expect(m.conversionRate).toBeCloseTo(4.5, 1);
-    expect(m.status).toBe('profitable');
-  });
+  const grossMargin = inputs.sellingPrice - inputs.landedCost;
+  const cogs = orders * inputs.landedCost;
+  const netAdProfit = inputs.adSales - inputs.adSpend - cogs;
 
-  it('calculates net ad profit correctly', () => {
-    const m = calculateMetrics(baseline);
-    // sales(15000) - spend(5000) - cogs(15 * 400 = 6000) = 4000
-    expect(m.netAdProfit).toBe(4000);
-  });
+  const cvFrac = conversionRate / 100;
+  const maxSafeBid = grossMargin > 0 ? grossMargin * cvFrac : 0;
+  const goldenBid = inputs.sellingPrice * cvFrac * (targetAcos / 100);
 
-  it('calculates max safe bid as margin × CR', () => {
-    const m = calculateMetrics(baseline);
-    // grossMargin(600) * CR(0.045) = 27
-    expect(m.maxSafeBid).toBeCloseTo(27, 1);
-  });
+  const status = calculateStatus(acos, breakEvenAcos);
 
-  it('calculates golden bid as price × CR × targetACOS', () => {
-    const m = calculateMetrics(baseline);
-    // 1000 * 0.045 * 0.50 = 22.5
-    expect(m.goldenBid).toBeCloseTo(22.5, 1);
-  });
+  return {
+    acos,
+    roas,
+    tacos,
+    marginPct,
+    breakEvenAcos,
+    targetAcos,
+    orders,
+    clicks,
+    clicksToSale,
+    conversionRate,
+    netAdProfit,
+    maxSafeBid,
+    goldenBid,
+    cpa,
+    status,
+  };
+}
 
-  it('handles zero sales gracefully (catastrophic ACOS)', () => {
-    const m = calculateMetrics({ ...baseline, adSales: 0 });
-    expect(m.acos).toBe(ACOS_INFINITE);
-    expect(m.roas).toBe(0);
-    expect(m.orders).toBe(0);
-    expect(m.status).toBe('critical');
-  });
+/* ─────────────────────────────────────────────
+   SCALE PROJECTION
+───────────────────────────────────────────── */
 
-  it('handles zero spend gracefully', () => {
-    const m = calculateMetrics({ ...baseline, adSpend: 0 });
-    expect(m.acos).toBe(0);
-    expect(m.clicks).toBe(0);
-    expect(m.conversionRate).toBe(0);
-    expect(m.status).toBe('profitable'); // technically nothing is being lost
-  });
+/** Project performance at `mult`× current scale. Sales decay as
+ *  (1 - decay)^log2(mult) — each doubling of spend loses `decay`
+ *  fraction of marginal returns. CR decays proportionally because
+ *  clicks scale linearly with spend. */
+export function calculateScaleProjection(
+  inputs: CampaignInputs,
+  mult: number,
+  decay: number = DEFAULT_SCALE_DECAY,
+): ScaleProjection {
+  const spend = inputs.adSpend * mult;
 
-  it('handles all-zero inputs without producing NaN or Infinity', () => {
-    const m = calculateMetrics({
-      adSpend: 0,
-      adSales: 0,
-      totalSales: 0,
-      cpc: 0,
-      sellingPrice: 0,
-      landedCost: 0,
-      targetProfitMargin: 0,
+  // At mult ≤ 1, doublings = 0 (or negative), so decay factor = 1.
+  // We use Math.max(mult, 1) to avoid spurious "growth" at mult < 1.
+  const doublings = Math.log2(Math.max(mult, 1));
+  const decayFactor = Math.pow(1 - decay, doublings);
+
+  const sales = inputs.adSales * mult * decayFactor;
+
+  const orders = inputs.sellingPrice > 0 ? sales / inputs.sellingPrice : 0;
+  const cogs = orders * inputs.landedCost;
+  const profit = sales - spend - cogs;
+
+  const clicks = inputs.cpc > 0 ? spend / inputs.cpc : 0;
+  const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
+
+  return {
+    mult,
+    spend,
+    sales,
+    profit,
+    conversionRate,
+  };
+}
+
+/* ─────────────────────────────────────────────
+   INSIGHTS GENERATOR
+───────────────────────────────────────────── */
+
+/** Default INR formatter used when no formatter is passed. Avoids
+ *  taking a hard dependency on Intl in test runners that may stub
+ *  globals. Currency-aware components can pass their own. */
+function defaultFmt(n: number): string {
+  if (!Number.isFinite(n)) return '₹0';
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(n);
+  } catch {
+    return `₹${Math.round(n).toLocaleString()}`;
+  }
+}
+
+export function generateInsights(
+  metrics: Metrics,
+  inputs: CampaignInputs,
+  fmt: (n: number) => string = defaultFmt,
+): Insight[] {
+  const insights: Insight[] = [];
+
+  // 1. Zero-sales catastrophe — spent money with no return
+  if (metrics.acos >= ACOS_INFINITE && inputs.adSpend > 0) {
+    insights.push({
+      type: 'danger',
+      text: `Spending ${fmt(inputs.adSpend)} with zero sales. Pause campaigns immediately and audit keyword relevance + landing-page conversion.`,
     });
-    expect(m.acos).toBe(0);
-    expect(m.roas).toBe(0);
-    expect(m.marginPct).toBe(0);
-    expect(m.netAdProfit).toBe(0);
-    expect(isFinite(m.maxSafeBid)).toBe(true);
-    expect(isFinite(m.goldenBid)).toBe(true);
-    expect(isFinite(m.cpa)).toBe(true);
-  });
+  }
 
-  it('handles negative margin (cost > price) safely', () => {
-    const m = calculateMetrics({ ...baseline, landedCost: 1200 });
-    expect(m.marginPct).toBe(-20);
-    expect(m.breakEvenAcos).toBe(0);
-    expect(m.maxSafeBid).toBe(0);
-  });
-
-  it('floors target ACOS at zero when desired margin exceeds gross margin', () => {
-    // breakEvenAcos = 10, desired margin = 30 → targetAcos would be -20, floor at 0
-    const m = calculateMetrics({
-      ...baseline,
-      landedCost: 900,
-      targetProfitMargin: 30,
+  // 2. Thin gross margin — even break-even is rough
+  if (metrics.marginPct > 0 && metrics.marginPct < 10) {
+    insights.push({
+      type: 'danger',
+      text: `Gross margin is only ${metrics.marginPct.toFixed(1)}% — there's almost no room for ads. Raise price or reduce landed cost before scaling spend.`,
     });
-    expect(m.targetAcos).toBe(0);
-  });
-});
+  }
 
-// ===========================================================================
-// calculateScaleProjection — REALISTIC decay
-// ===========================================================================
-describe('calculateScaleProjection', () => {
-  it('returns baseline at 1x with no decay applied', () => {
-    const p = calculateScaleProjection(baseline, 1);
-    expect(p.spend).toBe(baseline.adSpend);
-    expect(p.sales).toBe(baseline.adSales);
-  });
+  // 3. Loss or critical — concrete loss-per-sale
+  if (
+    (metrics.status === 'loss' || metrics.status === 'critical') &&
+    metrics.acos < ACOS_INFINITE
+  ) {
+    const lossPerSale =
+      metrics.orders > 0
+        ? (inputs.adSpend + metrics.orders * inputs.landedCost - inputs.adSales) /
+          metrics.orders
+        : 0;
+    insights.push({
+      type: 'danger',
+      text: `Losing approx. ${fmt(Math.abs(lossPerSale))} on every ad-driven sale. Cut CPC, narrow keyword targeting, or pause until economics improve.`,
+    });
+  }
 
-  it('applies efficiency decay at 2x scale', () => {
-    const p = calculateScaleProjection(baseline, 2);
-    expect(p.spend).toBe(10000); // spend always scales linearly
-    expect(p.sales).toBeLessThan(30000); // sales DON'T — that's the whole point
-    expect(p.sales).toBeCloseTo(15000 * 2 * 0.88, 0);
-  });
+  // 4. High ROAS — encourage scaling
+  if (metrics.roas >= 5 && metrics.netAdProfit > 0) {
+    insights.push({
+      type: 'success',
+      text: `ROAS of ${metrics.roas.toFixed(1)}× is exceptional. You likely have room to scale spend without major margin erosion.`,
+    });
+  }
 
-  it('compounds decay at 4x scale (two doublings)', () => {
-    const p = calculateScaleProjection(baseline, 4);
-    // (1 - 0.12)^log2(4) = 0.88^2 = 0.7744
-    expect(p.sales).toBeCloseTo(15000 * 4 * 0.7744, 0);
-  });
+  // 5. High TACoS — ads dominating total business
+  if (metrics.tacos > 20 && inputs.totalSales > 0) {
+    insights.push({
+      type: 'warning',
+      text: `TACoS at ${metrics.tacos.toFixed(1)}% means more than a fifth of total revenue is going to ads. Build organic ranking before scaling further.`,
+    });
+  }
 
-  it('respects custom decay rate', () => {
-    const noDecay = calculateScaleProjection(baseline, 2, 0);
-    expect(noDecay.sales).toBe(30000); // pure linear when decay is 0
+  // 6. Low conversion rate — funnel leak
+  if (
+    metrics.conversionRate > 0 &&
+    metrics.conversionRate < 2 &&
+    metrics.clicks >= 50
+  ) {
+    insights.push({
+      type: 'warning',
+      text: `Conversion rate of ${metrics.conversionRate.toFixed(1)}% is below the 2-3% Amazon benchmark. Fix listing images, A+ content, or price competitiveness before paying for more traffic.`,
+    });
+  }
 
-    const heavyDecay = calculateScaleProjection(baseline, 2, 0.25);
-    expect(heavyDecay.sales).toBeCloseTo(15000 * 2 * 0.75, 0);
-  });
+  // 7. Bid headroom — actual CPC much lower than max-safe bid
+  if (
+    inputs.cpc > 0 &&
+    metrics.maxSafeBid > inputs.cpc * 1.5 &&
+    metrics.status === 'profitable'
+  ) {
+    insights.push({
+      type: 'success',
+      text: `Your CPC (${fmt(inputs.cpc)}) is well below the max-safe bid (${fmt(metrics.maxSafeBid)}). You could bid more aggressively on top keywords without breaking even.`,
+    });
+  }
 
-  it('decays conversion rate alongside sales', () => {
-    const base = calculateMetrics(baseline);
-    const proj = calculateScaleProjection(baseline, 2);
-    expect(proj.conversionRate).toBeLessThan(base.conversionRate);
-    expect(proj.conversionRate).toBeCloseTo(base.conversionRate * 0.88, 1);
-  });
+  // Fallback when nothing else triggered
+  if (insights.length === 0) {
+    insights.push({
+      type: 'info',
+      text: 'Enter your campaign data to see profitability insights and bid recommendations.',
+    });
+  }
 
-  it('reduces profit growth vs linear assumption', () => {
-    const base = calculateMetrics(baseline);
-    const proj = calculateScaleProjection(baseline, 2);
-    // Linear assumption would predict profit = base * 2 = 8000
-    // With decay, profit is less
-    expect(proj.profit).toBeLessThan(base.netAdProfit * 2);
-  });
-});
-
-// ===========================================================================
-// generateInsights
-// ===========================================================================
-describe('generateInsights', () => {
-  it('returns a fallback info insight when nothing else triggers', () => {
-    const zeros: CampaignInputs = {
-      adSpend: 0,
-      adSales: 0,
-      totalSales: 0,
-      cpc: 0,
-      sellingPrice: 0,
-      landedCost: 0,
-      targetProfitMargin: 10,
-    };
-    const m = calculateMetrics(zeros);
-    const tips = generateInsights(m, zeros);
-    expect(tips).toHaveLength(1);
-    expect(tips[0].type).toBe('info');
-  });
-
-  it('warns about thin gross margins', () => {
-    const inputs = { ...baseline, landedCost: 950 }; // 5% margin
-    const m = calculateMetrics(inputs);
-    const tips = generateInsights(m, inputs);
-    expect(
-      tips.some((t) => t.type === 'danger' && /margin/i.test(t.text))
-    ).toBe(true);
-  });
-
-  it('warns about loss-making campaigns with exact loss per sale', () => {
-    const inputs = { ...baseline, adSpend: 12000 }; // ACOS 80% > breakEven 60%
-    const m = calculateMetrics(inputs);
-    const tips = generateInsights(m, inputs);
-    expect(
-      tips.some((t) => t.type === 'danger' && /Losing/i.test(t.text))
-    ).toBe(true);
-  });
-
-  it('praises high ROAS when campaign is profitable', () => {
-    const inputs = { ...baseline, adSpend: 2000 }; // ROAS 7.5x
-    const m = calculateMetrics(inputs);
-    const tips = generateInsights(m, inputs);
-    expect(
-      tips.some((t) => t.type === 'success' && /ROAS/i.test(t.text))
-    ).toBe(true);
-  });
-
-  it('flags the zero-sales catastrophe explicitly', () => {
-    const inputs = { ...baseline, adSales: 0 };
-    const m = calculateMetrics(inputs);
-    const tips = generateInsights(m, inputs);
-    expect(
-      tips.some((t) => t.type === 'danger' && /zero sales/i.test(t.text))
-    ).toBe(true);
-  });
-
-  it('caps output at 4 insights', () => {
-    const m = calculateMetrics(baseline);
-    const tips = generateInsights(m, baseline);
-    expect(tips.length).toBeLessThanOrEqual(4);
-  });
-});
+  return insights.slice(0, 4);
+}

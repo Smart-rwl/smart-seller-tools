@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Zap,
   Target,
@@ -22,12 +22,10 @@ import {
   Flame,
   Shield,
   Scale,
+  ChevronDown,
+  Filter,
 } from 'lucide-react';
 
-// NOTE: adjust import path to wherever you placed the lib file.
-// Common layouts:
-//   import { ... } from '@/lib/ppc-calculations'
-//   import { ... } from '../lib/ppc-calculations'
 import {
   calculateMetrics,
   calculateScaleProjection,
@@ -40,9 +38,20 @@ import {
   type InsightType,
 } from '@/lib/ppc-calculations';
 
-// ===========================================================================
-// CONSTANTS
-// ===========================================================================
+/* ─────────────────────────────────────────────
+   TYPES + CONSTANTS
+───────────────────────────────────────────── */
+
+type CurrencyCode = 'INR' | 'USD' | 'EUR' | 'GBP' | 'AED';
+
+const CURRENCIES: { code: CurrencyCode; symbol: string; locale: string }[] = [
+  { code: 'INR', symbol: '₹',   locale: 'en-IN' },
+  { code: 'USD', symbol: '$',   locale: 'en-US' },
+  { code: 'EUR', symbol: '€',   locale: 'de-DE' },
+  { code: 'GBP', symbol: '£',   locale: 'en-GB' },
+  { code: 'AED', symbol: 'AED', locale: 'en-AE' },
+];
+
 const DEFAULTS: CampaignInputs = {
   adSpend: 5000,
   adSales: 15000,
@@ -53,14 +62,16 @@ const DEFAULTS: CampaignInputs = {
   targetProfitMargin: 10,
 };
 
-const STORAGE_KEY = 'smartrwl-ppc-engine-v2';
+const STORAGE_KEY = 'smartrwl-ppc-engine-v3';
 
-// ===========================================================================
-// STORAGE HELPERS (SSR-safe)
-// ===========================================================================
 interface PersistedState extends CampaignInputs {
   activePreset: Preset | null;
+  currency: CurrencyCode;
 }
+
+/* ─────────────────────────────────────────────
+   STORAGE (SSR-safe)
+───────────────────────────────────────────── */
 
 function loadFromStorage(): PersistedState | null {
   if (typeof window === 'undefined') return null;
@@ -79,41 +90,50 @@ function saveToStorage(state: PersistedState): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch { /* quota / private mode — silently degrade */ }
+}
+
+/* ─────────────────────────────────────────────
+   FORMATTING
+───────────────────────────────────────────── */
+
+function fmtCurrency(n: number, code: CurrencyCode): string {
+  const c = CURRENCIES.find((x) => x.code === code)!;
+  if (!Number.isFinite(n)) return `${c.symbol}0`;
+  try {
+    return new Intl.NumberFormat(c.locale, {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(n);
   } catch {
-    // quota / private mode — silently degrade
+    return `${c.symbol}${Math.round(n).toLocaleString()}`;
   }
 }
 
-// ===========================================================================
-// FORMATTING HELPERS
-// ===========================================================================
-const fmt = (n: number): string => {
-  if (!isFinite(n)) return '₹0';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(n);
-};
+function fmtNumber(n: number, code: CurrencyCode): string {
+  const c = CURRENCIES.find((x) => x.code === code)!;
+  return Number.isFinite(n) ? Math.round(n).toLocaleString(c.locale) : '0';
+}
 
-// ===========================================================================
-// COMPONENT
-// ===========================================================================
+/* ═════════════════════════════════════════════
+   MAIN COMPONENT
+═════════════════════════════════════════════ */
+
 export default function AdProfitabilityEngine() {
-  // --- Inputs (SSR-safe: start with defaults, hydrate from storage in effect) ---
+  /* Inputs (SSR-safe defaults first, hydrate in effect) */
   const [adSpend, setAdSpend] = useState<number>(DEFAULTS.adSpend);
   const [adSales, setAdSales] = useState<number>(DEFAULTS.adSales);
   const [totalSales, setTotalSales] = useState<number>(DEFAULTS.totalSales);
   const [cpc, setCpc] = useState<number>(DEFAULTS.cpc);
   const [sellingPrice, setSellingPrice] = useState<number>(DEFAULTS.sellingPrice);
   const [landedCost, setLandedCost] = useState<number>(DEFAULTS.landedCost);
-  const [targetProfitMargin, setTargetProfitMargin] = useState<number>(
-    DEFAULTS.targetProfitMargin
-  );
+  const [targetProfitMargin, setTargetProfitMargin] = useState<number>(DEFAULTS.targetProfitMargin);
   const [activePreset, setActivePreset] = useState<Preset | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>('INR');
   const [hydrated, setHydrated] = useState(false);
 
-  // --- Hydration from localStorage (client-only) ---
+  /* Hydrate from localStorage on mount */
   useEffect(() => {
     const saved = loadFromStorage();
     if (saved) {
@@ -125,36 +145,23 @@ export default function AdProfitabilityEngine() {
       setLandedCost(safeNum(saved.landedCost));
       setTargetProfitMargin(safeNum(saved.targetProfitMargin));
       setActivePreset(saved.activePreset ?? null);
+      if (saved.currency && CURRENCIES.some((c) => c.code === saved.currency)) {
+        setCurrency(saved.currency);
+      }
     }
     setHydrated(true);
   }, []);
 
-  // --- Persist on change (after hydration) ---
+  /* Persist after hydration */
   useEffect(() => {
     if (!hydrated) return;
     saveToStorage({
-      adSpend,
-      adSales,
-      totalSales,
-      cpc,
-      sellingPrice,
-      landedCost,
-      targetProfitMargin,
-      activePreset,
+      adSpend, adSales, totalSales, cpc, sellingPrice, landedCost,
+      targetProfitMargin, activePreset, currency,
     });
-  }, [
-    hydrated,
-    adSpend,
-    adSales,
-    totalSales,
-    cpc,
-    sellingPrice,
-    landedCost,
-    targetProfitMargin,
-    activePreset,
-  ]);
+  }, [hydrated, adSpend, adSales, totalSales, cpc, sellingPrice, landedCost, targetProfitMargin, activePreset, currency]);
 
-  // --- Inject fonts once on mount ---
+  /* Inject fonts once */
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const id = 'smartrwl-ppc-fonts';
@@ -162,44 +169,32 @@ export default function AdProfitabilityEngine() {
     const link = document.createElement('link');
     link.id = id;
     link.rel = 'stylesheet';
-    link.href =
-      'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap';
     document.head.appendChild(link);
   }, []);
 
-  // ---------- DERIVED STATE ----------
-  const inputs: CampaignInputs = {
-    adSpend,
-    adSales,
-    totalSales,
-    cpc,
-    sellingPrice,
-    landedCost,
-    targetProfitMargin,
-  };
+  /* Derived */
+  const inputs: CampaignInputs = useMemo(() => ({
+    adSpend, adSales, totalSales, cpc, sellingPrice, landedCost, targetProfitMargin,
+  }), [adSpend, adSales, totalSales, cpc, sellingPrice, landedCost, targetProfitMargin]);
 
-  const metrics = useMemo(
-    () => calculateMetrics(inputs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [adSpend, adSales, totalSales, cpc, sellingPrice, landedCost, targetProfitMargin]
-  );
+  const metrics = useMemo(() => calculateMetrics(inputs), [inputs]);
+
+  const fmt = (n: number) => fmtCurrency(n, currency);
+  const fmtN = (n: number) => fmtNumber(n, currency);
+  const symbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? '₹';
 
   const insights = useMemo(
     () => generateInsights(metrics, inputs),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metrics]
+    [metrics, inputs],
   );
 
   const scaleProjections = useMemo(
-    () =>
-      [1, 1.5, 2, 3].map((m) =>
-        calculateScaleProjection(inputs, m, DEFAULT_SCALE_DECAY)
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [adSpend, adSales, cpc, sellingPrice, landedCost, targetProfitMargin]
+    () => [1, 1.5, 2, 3].map((mult) => calculateScaleProjection(inputs, mult, DEFAULT_SCALE_DECAY)),
+    [inputs],
   );
 
-  // ---------- ACTIONS ----------
+  /* Actions */
   const applyPreset = (preset: Preset) => {
     setActivePreset(preset);
     if (preset === 'growth') setTargetProfitMargin(5);
@@ -207,8 +202,6 @@ export default function AdProfitabilityEngine() {
     if (preset === 'profit') setTargetProfitMargin(20);
   };
 
-  // FIX #1: manual slider changes deactivate any active preset (unless they happen
-  // to land exactly on the preset's value)
   const handleSliderChange = (value: number) => {
     setTargetProfitMargin(value);
     const presetValues: Record<Preset, number> = { growth: 5, balanced: 10, profit: 20 };
@@ -218,6 +211,7 @@ export default function AdProfitabilityEngine() {
   };
 
   const resetAll = () => {
+    if (!confirm('Reset all campaign inputs to defaults? This will clear your saved state.')) return;
     setAdSpend(DEFAULTS.adSpend);
     setAdSales(DEFAULTS.adSales);
     setTotalSales(DEFAULTS.totalSales);
@@ -227,18 +221,16 @@ export default function AdProfitabilityEngine() {
     setTargetProfitMargin(DEFAULTS.targetProfitMargin);
     setActivePreset(null);
     if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.removeItem(STORAGE_KEY);
-      } catch {}
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch {}
     }
   };
 
-  // ---------- DISPLAY HELPERS ----------
+  /* Display config */
   const statusConfig: Record<typeof metrics.status, { dot: string; label: string; glow: string }> = {
-    profitable: { dot: 'bg-emerald-400', label: 'Profitable', glow: 'shadow-emerald-500/20' },
-    'break-even': { dot: 'bg-amber-400', label: 'Break-even', glow: 'shadow-amber-500/20' },
-    loss: { dot: 'bg-red-400', label: 'Losing money', glow: 'shadow-red-500/20' },
-    critical: { dot: 'bg-red-500 animate-pulse', label: 'Critical loss', glow: 'shadow-red-600/30' },
+    profitable:   { dot: 'bg-emerald-400',           label: 'Profitable',     glow: 'shadow-emerald-500/20' },
+    'break-even': { dot: 'bg-amber-400',             label: 'Break-even',     glow: 'shadow-amber-500/20' },
+    loss:         { dot: 'bg-rose-400',              label: 'Losing money',   glow: 'shadow-rose-500/20' },
+    critical:     { dot: 'bg-rose-500 animate-pulse',label: 'Critical loss',  glow: 'shadow-rose-600/30' },
   };
 
   const gaugeMax = Math.max(metrics.breakEvenAcos * 1.5, 30);
@@ -246,18 +238,11 @@ export default function AdProfitabilityEngine() {
   const targetPct = Math.min((metrics.targetAcos / gaugeMax) * 100, 100);
   const breakEvenPct = Math.min((metrics.breakEvenAcos / gaugeMax) * 100, 100);
 
-  // Shared focus ring class for accessibility (FIX #6)
-  const focusRing =
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950';
+  const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950';
+  const inputBaseClass = `w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-white font-mono text-sm outline-none transition-colors hover:border-slate-700 focus:border-orange-400/60 ${focusRing}`;
 
-  const inputBaseClass = `w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-white font-mono text-sm outline-none transition-colors hover:border-slate-700 focus:border-amber-400/60 ${focusRing}`;
-
-  // ===========================================================================
-  // RENDER
-  // ===========================================================================
   return (
     <>
-      {/* Local stylesheet — fonts, custom utilities, grid texture (FIX #3) */}
       <style>{`
         .ppc-app {
           font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -289,15 +274,16 @@ export default function AdProfitabilityEngine() {
 
       <div className="ppc-app min-h-screen bg-slate-950 text-slate-200 ppc-grid-bg">
         <div className="max-w-7xl mx-auto p-4 sm:p-6 md:p-12">
-          {/* ============= HEADER ============= */}
+
+          {/* ─── HEADER ─── */}
           <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-10 pb-8 border-b border-slate-800">
             <div>
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-amber-400/80 mb-2 font-bold">
-                <span className="w-6 h-px bg-amber-400/60" />
-                Smartrwl · PPC Terminal
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-orange-400/80 mb-2 font-bold">
+                <span className="w-6 h-px bg-orange-400/60" />
+                SmartRwl · PPC Terminal
               </div>
               <h1 className="font-display text-4xl sm:text-5xl md:text-6xl text-white leading-none flex items-center gap-3">
-                <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-amber-400" strokeWidth={1.5} />
+                <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-orange-400" strokeWidth={1.5} />
                 Profitability Engine
               </h1>
               <p className="text-slate-400 mt-3 text-sm sm:text-base max-w-xl">
@@ -305,6 +291,7 @@ export default function AdProfitabilityEngine() {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
+              <CurrencyPicker value={currency} onChange={setCurrency} focusRing={focusRing} />
               <button
                 onClick={resetAll}
                 className={`flex items-center gap-2 text-xs uppercase tracking-wider text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 bg-slate-900/50 backdrop-blur px-3 py-2 rounded-md transition-colors ${focusRing}`}
@@ -315,8 +302,7 @@ export default function AdProfitabilityEngine() {
               </button>
               <div
                 className={`flex items-center gap-2 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-md border border-slate-800 shadow-lg ${statusConfig[metrics.status].glow}`}
-                role="status"
-                aria-live="polite"
+                role="status" aria-live="polite"
               >
                 <div className={`w-2.5 h-2.5 rounded-full ${statusConfig[metrics.status].dot}`} />
                 <span className="text-xs font-bold text-slate-200 uppercase tracking-[0.15em]">
@@ -326,110 +312,113 @@ export default function AdProfitabilityEngine() {
             </div>
           </header>
 
-          {/* ============= PRESET BAR ============= */}
+          {/* ─── PRESET BAR ─── */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-8 bg-gradient-to-r from-slate-900/80 to-slate-900/30 border border-slate-800 rounded-md p-4 backdrop-blur">
             <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold pr-3 sm:border-r sm:border-slate-800">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <Sparkles className="w-3.5 h-3.5 text-orange-400" />
               Strategy
             </div>
             <div className="grid grid-cols-3 sm:flex gap-2 flex-1">
-              <PresetButton active={activePreset === 'growth'} onClick={() => applyPreset('growth')} color="orange" icon={<Flame className="w-3.5 h-3.5" />} label="Growth" subtitle="5% margin" focusRing={focusRing} />
-              <PresetButton active={activePreset === 'balanced'} onClick={() => applyPreset('balanced')} color="blue" icon={<Scale className="w-3.5 h-3.5" />} label="Balanced" subtitle="10% margin" focusRing={focusRing} />
-              <PresetButton active={activePreset === 'profit'} onClick={() => applyPreset('profit')} color="emerald" icon={<Shield className="w-3.5 h-3.5" />} label="Profit" subtitle="20% margin" focusRing={focusRing} />
+              <PresetButton active={activePreset === 'growth'}   onClick={() => applyPreset('growth')}   color="orange"  icon={<Flame className="w-3.5 h-3.5" />}  label="Growth"   subtitle="5% margin"  focusRing={focusRing} />
+              <PresetButton active={activePreset === 'balanced'} onClick={() => applyPreset('balanced')} color="sky"     icon={<Scale className="w-3.5 h-3.5" />}  label="Balanced" subtitle="10% margin" focusRing={focusRing} />
+              <PresetButton active={activePreset === 'profit'}   onClick={() => applyPreset('profit')}   color="emerald" icon={<Shield className="w-3.5 h-3.5" />} label="Profit"   subtitle="20% margin" focusRing={focusRing} />
             </div>
           </div>
 
-          {/* ============= MAIN GRID ============= */}
+          {/* ─── MAIN GRID ─── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-16">
-            {/* ----- LEFT: INPUTS ----- */}
+
+            {/* ── LEFT: INPUTS ── */}
             <div className="lg:col-span-4 space-y-6">
-              <Panel title="Campaign Data" icon={<BarChart3 className="w-3.5 h-3.5 text-blue-400" />}>
-                <Field label="Ad Spend (₹)">
-                  <input type="number" min={0} value={adSpend || ''} onChange={(e) => setAdSpend(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+
+              <Panel title="Campaign Data" icon={<BarChart3 className="w-3.5 h-3.5 text-sky-400" />}>
+                <Field label={`Ad Spend (${symbol})`}>
+                  <input type="number" min={0} value={adSpend === 0 ? '' : adSpend} onChange={(e) => setAdSpend(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                 </Field>
                 <Field label="Ad Sales (Revenue)">
-                  <input type="number" min={0} value={adSales || ''} onChange={(e) => setAdSales(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+                  <input type="number" min={0} value={adSales === 0 ? '' : adSales} onChange={(e) => setAdSales(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                 </Field>
                 <Field label="Total Sales (Ad + Organic)">
-                  <input type="number" min={0} value={totalSales || ''} onChange={(e) => setTotalSales(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+                  <input type="number" min={0} value={totalSales === 0 ? '' : totalSales} onChange={(e) => setTotalSales(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                 </Field>
               </Panel>
 
               <Panel title="Unit Economics" icon={<Target className="w-3.5 h-3.5 text-emerald-400" />}>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="CPC (Avg)">
-                    <input type="number" min={0} step="0.5" value={cpc || ''} onChange={(e) => setCpc(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+                    <input type="number" min={0} step={0.5} value={cpc === 0 ? '' : cpc} onChange={(e) => setCpc(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                   </Field>
                   <Field label="Price">
-                    <input type="number" min={0} value={sellingPrice || ''} onChange={(e) => setSellingPrice(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+                    <input type="number" min={0} value={sellingPrice === 0 ? '' : sellingPrice} onChange={(e) => setSellingPrice(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                   </Field>
                 </div>
                 <Field label="Landed Cost">
-                  <input type="number" min={0} value={landedCost || ''} onChange={(e) => setLandedCost(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
+                  <input type="number" min={0} value={landedCost === 0 ? '' : landedCost} onChange={(e) => setLandedCost(safeNum(e.target.value))} className={inputBaseClass} placeholder="0" />
                 </Field>
 
                 <div className="bg-slate-950 border border-slate-800 rounded-md p-3 mt-2">
                   <div className="flex justify-between items-center text-[10px] uppercase tracking-wider">
                     <span className="text-slate-500 font-bold">Gross Margin</span>
-                    <span className={`font-mono font-bold text-sm ppc-tick ${metrics.marginPct >= 30 ? 'text-emerald-400' : metrics.marginPct >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
+                    <span className={`font-mono font-bold text-sm ppc-tick ${metrics.marginPct >= 30 ? 'text-emerald-400' : metrics.marginPct >= 15 ? 'text-amber-400' : 'text-rose-400'}`}>
                       {metrics.marginPct.toFixed(1)}%
                     </span>
                   </div>
                   <div className="w-full bg-slate-800/60 h-1 rounded-full mt-2 overflow-hidden">
-                    <div className={`h-full transition-all duration-500 ${metrics.marginPct >= 30 ? 'bg-emerald-400' : metrics.marginPct >= 15 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${Math.min(Math.max(metrics.marginPct, 0), 100)}%` }} />
+                    <div
+                      className={`h-full transition-all duration-500 ${metrics.marginPct >= 30 ? 'bg-emerald-400' : metrics.marginPct >= 15 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                      style={{ width: `${Math.min(Math.max(metrics.marginPct, 0), 100)}%` }}
+                    />
                   </div>
                 </div>
               </Panel>
 
-              <Panel title="Profit Strategy" icon={<Calculator className="w-3.5 h-3.5 text-purple-400" />}>
+              <Panel title="Profit Strategy" icon={<Calculator className="w-3.5 h-3.5 text-orange-400" />}>
                 <div>
                   <div className="flex justify-between mb-2">
                     <label htmlFor="target-margin-slider" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       Desired Net Margin
                     </label>
-                    <span className="text-xs text-purple-400 font-mono font-bold ppc-tick">
+                    <span className="text-xs text-orange-400 font-mono font-bold ppc-tick">
                       {targetProfitMargin}%
                     </span>
                   </div>
                   <input
                     id="target-margin-slider"
-                    type="range"
-                    min={0}
-                    max={30}
-                    step={1}
+                    type="range" min={0} max={30} step={1}
                     value={targetProfitMargin}
                     onChange={(e) => handleSliderChange(Number(e.target.value))}
-                    className={`w-full accent-purple-500 ${focusRing}`}
-                    aria-valuemin={0}
-                    aria-valuemax={30}
-                    aria-valuenow={targetProfitMargin}
+                    className={`w-full accent-orange-500 ${focusRing}`}
+                    aria-valuemin={0} aria-valuemax={30} aria-valuenow={targetProfitMargin}
                   />
                   <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                    Keep {targetProfitMargin}% net profit after ad spend on every sale.
+                    Keep <span className="text-slate-300 font-mono font-bold">{targetProfitMargin}%</span> net profit after ad spend on every sale.
                   </p>
                 </div>
               </Panel>
             </div>
 
-            {/* ----- RIGHT: INTELLIGENCE ----- */}
+            {/* ── RIGHT: INTELLIGENCE ── */}
             <div className="lg:col-span-8 space-y-6">
+
+              {/* KPI cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard label="Actual ACOS" value={metrics.acos >= ACOS_INFINITE ? '∞' : `${metrics.acos.toFixed(1)}%`} danger={metrics.status === 'loss' || metrics.status === 'critical'} />
-                <KpiCard label="ROAS" value={`${metrics.roas.toFixed(2)}x`} />
+                <KpiCard label="ROAS" value={`${metrics.roas.toFixed(2)}×`} />
                 <KpiCard label="TACoS" value={`${metrics.tacos.toFixed(1)}%`} />
-                <KpiCard label="Target ACOS" value={`${metrics.targetAcos.toFixed(1)}%`} accent="purple" />
+                <KpiCard label="Target ACOS" value={`${metrics.targetAcos.toFixed(1)}%`} accent="orange" />
               </div>
 
-              <Panel title="ACOS Position" icon={<Target className="w-3.5 h-3.5" />} rightSlot={<span className="text-[10px] text-slate-500 font-mono">0–{gaugeMax.toFixed(0)}%</span>}>
+              {/* ACOS gauge */}
+              <Panel title="ACOS Position" icon={<Target className="w-3.5 h-3.5 text-orange-400" />} rightSlot={<span className="text-[10px] text-slate-500 font-mono">0–{gaugeMax.toFixed(0)}%</span>}>
                 <div className="relative h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                   <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500/30 to-emerald-500/50" style={{ width: `${targetPct}%` }} />
                   <div className="absolute top-0 h-full bg-gradient-to-r from-amber-500/30 to-amber-500/50" style={{ left: `${targetPct}%`, width: `${Math.max(breakEvenPct - targetPct, 0)}%` }} />
-                  <div className="absolute top-0 h-full bg-gradient-to-r from-red-500/30 to-red-500/50" style={{ left: `${breakEvenPct}%`, right: 0 }} />
+                  <div className="absolute top-0 h-full bg-gradient-to-r from-rose-500/30 to-rose-500/50" style={{ left: `${breakEvenPct}%`, right: 0 }} />
                   <div className="absolute top-1/2 -translate-y-1/2 w-1 h-5 bg-white rounded-full shadow-lg shadow-white/40 transition-all duration-500" style={{ left: `calc(${acosPct}% - 2px)` }} aria-hidden />
                 </div>
                 <div className="grid grid-cols-3 gap-4 mt-4 text-[10px]">
                   <div>
-                    <div className="text-emerald-400 font-bold uppercase tracking-wider">Profit Zone</div>
+                    <div className="text-emerald-400 font-bold uppercase tracking-wider">Profit zone</div>
                     <div className="text-slate-500 font-mono ppc-tick mt-0.5">≤ {metrics.targetAcos.toFixed(1)}%</div>
                   </div>
                   <div className="text-center">
@@ -437,20 +426,25 @@ export default function AdProfitabilityEngine() {
                     <div className="text-slate-500 font-mono ppc-tick mt-0.5">up to {metrics.breakEvenAcos.toFixed(1)}%</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-red-400 font-bold uppercase tracking-wider">Loss Zone</div>
+                    <div className="text-rose-400 font-bold uppercase tracking-wider">Loss zone</div>
                     <div className="text-slate-500 font-mono ppc-tick mt-0.5">&gt; {metrics.breakEvenAcos.toFixed(1)}%</div>
                   </div>
                 </div>
               </Panel>
 
+              {/* Net Ad Profit hero */}
               <div className="bg-slate-900/60 backdrop-blur border border-slate-800 rounded-md p-6 sm:p-8 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-[0.06] pointer-events-none">
                   <DollarSign className="w-40 h-40 sm:w-56 sm:h-56 text-white" />
                 </div>
                 <div className="relative z-10">
-                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6">Net Ad Profit</h3>
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6">Net ad profit</h3>
                   <div className="flex items-baseline gap-4 mb-5 flex-wrap">
-                    <span className={`font-display text-5xl sm:text-6xl md:text-7xl transition-colors ppc-tick ${metrics.netAdProfit > 0 ? 'text-emerald-300' : metrics.netAdProfit < 0 ? 'text-red-300' : 'text-slate-400'}`}>
+                    <span className={`font-display text-5xl sm:text-6xl md:text-7xl transition-colors ppc-tick ${
+                      metrics.netAdProfit > 0 ? 'text-emerald-300'
+                      : metrics.netAdProfit < 0 ? 'text-rose-300'
+                      : 'text-slate-400'
+                    }`}>
                       {metrics.netAdProfit > 0 ? '+' : ''}{fmt(metrics.netAdProfit)}
                     </span>
                     <span className="text-slate-400 text-sm italic">from paid traffic</span>
@@ -462,7 +456,7 @@ export default function AdProfitabilityEngine() {
                         Ads are generating real profit. Consider scaling up.
                       </p>
                     ) : (
-                      <p className="text-red-400 flex items-center gap-2">
+                      <p className="text-rose-400 flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                         Losing money on every ad sale — adjust bids or pause.
                       </p>
@@ -471,6 +465,7 @@ export default function AdProfitabilityEngine() {
                 </div>
               </div>
 
+              {/* Smart Insights */}
               <Panel title="Smart Insights" icon={<Lightbulb className="w-3.5 h-3.5 text-amber-400" />}>
                 <div className="space-y-2 ppc-fade">
                   {insights.map((insight, i) => (
@@ -479,48 +474,57 @@ export default function AdProfitabilityEngine() {
                 </div>
               </Panel>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Panel title="Ad Funnel" icon={<MousePointerClick className="w-3.5 h-3.5" />}>
-                  <FunnelRow label="Conversion Rate" value={`${metrics.conversionRate.toFixed(1)}%`} bold />
-                  <Divider />
-                  <FunnelRow label="Clicks per Sale" value={metrics.clicksToSale > 0 ? `${metrics.clicksToSale}` : '—'} bold />
-                  <Divider />
-                  <FunnelRow label="Cost Per Acquisition" value={fmt(metrics.cpa)} mono />
-                  <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">
-                    You spend <span className="font-mono text-slate-400">{fmt(metrics.cpa)}</span> in ads to acquire each order.
-                  </p>
-                </Panel>
+              {/* NEW: Ad Funnel Visualization */}
+              <AdFunnelPanel
+                clicks={metrics.clicks}
+                orders={metrics.orders}
+                conversionRate={metrics.conversionRate}
+                cpa={metrics.cpa}
+                clicksToSale={metrics.clicksToSale}
+                fmt={fmt}
+                fmtN={fmtN}
+              />
 
-                <Panel title="Recommended Bids" icon={<Crosshair className="w-3.5 h-3.5" />}>
+              {/* Recommended Bids */}
+              <Panel title="Recommended Bids" icon={<Crosshair className="w-3.5 h-3.5 text-orange-400" />}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="p-3 rounded-md bg-slate-950 border border-slate-800">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Max Safe Bid · Break-even</span>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Max safe bid · break-even</span>
                     <div className="flex justify-between items-end">
-                      <span className="text-xl font-bold text-white font-mono ppc-tick">₹{metrics.maxSafeBid.toFixed(2)}</span>
-                      <span className="text-[10px] text-amber-400">0% Profit</span>
+                      <span className="text-xl font-bold text-white font-mono ppc-tick">{fmt(metrics.maxSafeBid)}</span>
+                      <span className="text-[10px] text-amber-400">0% profit</span>
                     </div>
                   </div>
-                  <div className="p-3 rounded-md bg-purple-500/[0.07] border border-purple-500/30">
-                    <span className="text-[10px] text-purple-300 uppercase tracking-wider block mb-1">Golden Bid · Target Profit</span>
+                  <div className="p-3 rounded-md bg-amber-500/[0.07] border border-amber-500/30">
+                    <span className="text-[10px] text-amber-300 uppercase tracking-wider block mb-1">Golden bid · target profit</span>
                     <div className="flex justify-between items-end">
-                      <span className="text-xl font-bold text-purple-300 font-mono ppc-tick">₹{metrics.goldenBid.toFixed(2)}</span>
-                      <span className="text-[10px] text-purple-300">{targetProfitMargin}% Profit</span>
+                      <span className="text-xl font-bold text-amber-300 font-mono ppc-tick">{fmt(metrics.goldenBid)}</span>
+                      <span className="text-[10px] text-amber-300">{targetProfitMargin}% profit</span>
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Bid <b className="text-slate-300 font-mono">₹{metrics.goldenBid.toFixed(2)}</b> to maintain your {targetProfitMargin}% margin goal.
-                  </p>
-                </Panel>
-              </div>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed mt-1">
+                  Bid <b className="text-slate-300 font-mono">{fmt(metrics.goldenBid)}</b> to maintain your <b className="text-amber-300">{targetProfitMargin}%</b> margin goal.
+                </p>
+              </Panel>
 
-              <Panel title="Bid Sensitivity by Conversion Rate" icon={<TrendingUp className="w-3.5 h-3.5" />}>
+              {/* Bid Sensitivity */}
+              <Panel title="Bid Sensitivity by Conversion Rate" icon={<TrendingUp className="w-3.5 h-3.5 text-orange-400" />}>
                 <div className="grid grid-cols-4 gap-2 text-center">
                   {[5, 10, 15, 20].map((cv) => {
                     const bid = sellingPrice * (cv / 100) * (metrics.targetAcos / 100);
                     const isClose = Math.abs(cv - metrics.conversionRate) < 2.5;
                     return (
-                      <div key={cv} className={`p-2 sm:p-3 rounded-md border transition-all ${isClose ? 'bg-amber-400/15 border-amber-400/60 text-white scale-105 shadow-lg shadow-amber-500/10' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
+                      <div
+                        key={cv}
+                        className={`p-2 sm:p-3 rounded-md border transition-all ${
+                          isClose
+                            ? 'bg-orange-400/15 border-orange-400/60 text-white scale-105 shadow-lg shadow-orange-500/10'
+                            : 'bg-slate-950 border-slate-800 text-slate-500'
+                        }`}
+                      >
                         <div className="text-[10px] uppercase tracking-wider mb-1">CvR {cv}%</div>
-                        <div className="font-mono font-bold text-sm ppc-tick">₹{bid.toFixed(0)}</div>
+                        <div className="font-mono font-bold text-sm ppc-tick">{fmt(bid)}</div>
                       </div>
                     );
                   })}
@@ -530,8 +534,12 @@ export default function AdProfitabilityEngine() {
                 </p>
               </Panel>
 
-              {/* FIX #2: realistic scale projection with decay */}
-              <Panel title="Scale Projection" icon={<Rocket className="w-3.5 h-3.5 text-orange-400" />} rightSlot={<span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:inline">Decay-adjusted</span>}>
+              {/* Scale Projection */}
+              <Panel
+                title="Scale Projection"
+                icon={<Rocket className="w-3.5 h-3.5 text-orange-400" />}
+                rightSlot={<span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:inline">Decay-adjusted</span>}
+              >
                 <div className="overflow-x-auto -mx-2 px-2">
                   <table className="w-full text-sm min-w-[520px]">
                     <thead>
@@ -546,10 +554,10 @@ export default function AdProfitabilityEngine() {
                     <tbody>
                       {scaleProjections.map((p) => (
                         <tr key={p.mult} className={`border-b border-slate-800/40 ${p.mult === 1 ? 'bg-slate-800/20' : ''}`}>
-                          <td className="py-2.5 text-slate-300 font-medium">{p.mult === 1 ? 'Current' : `${p.mult}x`}</td>
+                          <td className="py-2.5 text-slate-300 font-medium">{p.mult === 1 ? 'Current' : `${p.mult}×`}</td>
                           <td className="text-right text-slate-400 font-mono ppc-tick">{fmt(p.spend)}</td>
                           <td className="text-right text-slate-400 font-mono ppc-tick">{fmt(p.sales)}</td>
-                          <td className={`text-right font-mono font-bold ppc-tick ${p.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <td className={`text-right font-mono font-bold ppc-tick ${p.profit > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {p.profit > 0 ? '+' : ''}{fmt(p.profit)}
                           </td>
                           <td className="text-right text-slate-500 font-mono ppc-tick text-xs">{p.conversionRate.toFixed(1)}%</td>
@@ -561,35 +569,35 @@ export default function AdProfitabilityEngine() {
                 <div className="mt-3 bg-amber-500/[0.05] border border-amber-500/20 rounded-md p-3 flex gap-2 text-[10px] text-amber-200/80 leading-relaxed">
                   <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
                   <span>
-                    <b className="text-amber-300">Realistic model:</b> conversion rate decays {(DEFAULT_SCALE_DECAY * 100).toFixed(0)}% per doubling of spend, because you exhaust high-intent searches first. Profit growth is sub-linear — plan accordingly.
+                    <b className="text-amber-300">Realistic model:</b> conversion rate decays {(DEFAULT_SCALE_DECAY * 100).toFixed(0)}% per doubling of spend, because high-intent searches get exhausted first. Profit growth is sub-linear — plan accordingly.
                   </span>
                 </div>
               </Panel>
             </div>
           </div>
 
-          {/* ============= GUIDE ============= */}
+          {/* ─── GUIDE ─── */}
           <section className="border-t border-slate-800 pt-12 mb-12">
             <h2 className="font-display text-3xl sm:text-4xl text-white mb-2 flex items-center gap-3">
-              <BookOpen className="w-7 h-7 text-amber-400" strokeWidth={1.5} />
-              PPC Master Guide
+              <BookOpen className="w-7 h-7 text-orange-400" strokeWidth={1.5} />
+              PPC master guide
             </h2>
             <p className="text-slate-400 text-sm mb-8">The three concepts every Amazon seller must internalize.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <GuideCard icon={<BarChart3 className="w-5 h-5 text-blue-400" />} iconBg="bg-blue-500/10" title="ACOS vs. TACoS">
-                <b>ACOS</b> checks ad efficiency. <b>TACoS</b> checks business health. If ACOS is high but TACoS is below 10%, your organic sales are strong enough to support aggressive ads.
+              <GuideCard icon={<BarChart3 className="w-5 h-5 text-sky-400" />} iconBg="bg-sky-500/10 border-sky-500/30" title="ACOS vs. TACoS">
+                <b className="text-slate-200">ACOS</b> checks ad efficiency. <b className="text-slate-200">TACoS</b> checks business health. If ACOS is high but TACoS is below 10%, your organic sales are strong enough to support aggressive ads.
               </GuideCard>
-              <GuideCard icon={<Target className="w-5 h-5 text-emerald-400" />} iconBg="bg-emerald-500/10" title="The Break-Even Rule">
-                Your break-even ACOS equals your <b>gross margin %</b>. With 30% margin, you can spend up to 30% of sales on ads without losing money — but that's zero profit.
+              <GuideCard icon={<Target className="w-5 h-5 text-emerald-400" />} iconBg="bg-emerald-500/10 border-emerald-500/30" title="The break-even rule">
+                Your break-even ACOS equals your <b className="text-slate-200">gross margin %</b>. With 30% margin, you can spend up to 30% of sales on ads without losing money — but that&apos;s zero profit.
               </GuideCard>
-              <GuideCard icon={<Crosshair className="w-5 h-5 text-purple-400" />} iconBg="bg-purple-500/10" title="Golden Bid Strategy">
-                Don't bid to break even — bid to <b>profit</b>. The Golden Bid sets your max keyword bid so every sale leaves {targetProfitMargin}% in your pocket.
+              <GuideCard icon={<Crosshair className="w-5 h-5 text-amber-400" />} iconBg="bg-amber-500/10 border-amber-500/30" title="Golden bid strategy">
+                Don&apos;t bid to break even — bid to <b className="text-slate-200">profit</b>. The Golden Bid sets your max keyword bid so every sale leaves <b className="text-amber-300">{targetProfitMargin}%</b> in your pocket.
               </GuideCard>
             </div>
           </section>
 
-          {/* ============= FOOTER ============= */}
+          {/* ─── FOOTER ─── */}
           <footer className="flex flex-col items-center justify-center space-y-3 border-t border-slate-800 pt-8">
             <p className="text-slate-500 font-medium text-sm">
               Created by <span className="font-display text-slate-300 text-base">SmartRwl</span>
@@ -615,9 +623,10 @@ export default function AdProfitabilityEngine() {
   );
 }
 
-// ===========================================================================
-// SUB-COMPONENTS
-// ===========================================================================
+/* ═════════════════════════════════════════════
+   SUB-COMPONENTS
+═════════════════════════════════════════════ */
+
 interface PanelProps {
   title: string;
   icon?: React.ReactNode;
@@ -652,19 +661,19 @@ interface KpiCardProps {
   label: string;
   value: string;
   danger?: boolean;
-  accent?: 'purple';
+  accent?: 'orange';
 }
 function KpiCard({ label, value, danger, accent }: KpiCardProps) {
   let cls = 'bg-slate-900/60 backdrop-blur border border-slate-800 rounded-md p-4 transition-colors';
-  if (danger) cls = 'bg-red-950/30 backdrop-blur border border-red-900/60 rounded-md p-4 transition-colors';
-  if (accent === 'purple') cls = 'bg-purple-500/[0.07] backdrop-blur border border-purple-500/30 rounded-md p-4';
+  if (danger) cls = 'bg-rose-950/30 backdrop-blur border border-rose-900/60 rounded-md p-4 transition-colors';
+  if (accent === 'orange') cls = 'bg-orange-500/[0.07] backdrop-blur border border-orange-500/30 rounded-md p-4';
 
   return (
     <div className={cls}>
-      <div className={`text-[10px] font-bold uppercase tracking-[0.15em] mb-1 ${accent === 'purple' ? 'text-purple-300' : 'text-slate-400'}`}>
+      <div className={`text-[10px] font-bold uppercase tracking-[0.15em] mb-1 ${accent === 'orange' ? 'text-orange-300' : 'text-slate-400'}`}>
         {label}
       </div>
-      <div className={`font-mono font-bold text-xl sm:text-2xl ppc-tick ${accent === 'purple' ? 'text-purple-300' : 'text-white'}`}>
+      <div className={`font-mono font-bold text-xl sm:text-2xl ppc-tick ${accent === 'orange' ? 'text-orange-300' : 'text-white'}`}>
         {value}
       </div>
     </div>
@@ -674,7 +683,7 @@ function KpiCard({ label, value, danger, accent }: KpiCardProps) {
 interface PresetButtonProps {
   active: boolean;
   onClick: () => void;
-  color: 'orange' | 'blue' | 'emerald';
+  color: 'orange' | 'sky' | 'emerald';
   icon: React.ReactNode;
   label: string;
   subtitle: string;
@@ -682,8 +691,8 @@ interface PresetButtonProps {
 }
 function PresetButton({ active, onClick, color, icon, label, subtitle, focusRing }: PresetButtonProps) {
   const activeStyles = {
-    orange: 'bg-orange-500/15 border-orange-500/60 text-orange-300',
-    blue: 'bg-blue-500/15 border-blue-500/60 text-blue-300',
+    orange:  'bg-orange-500/15 border-orange-500/60 text-orange-300',
+    sky:     'bg-sky-500/15 border-sky-500/60 text-sky-300',
     emerald: 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300',
   };
   return (
@@ -703,10 +712,14 @@ function InsightRow({ type, text }: { type: InsightType; text: string }) {
   const styles: Record<InsightType, string> = {
     success: 'bg-emerald-500/[0.06] border-emerald-500/30 text-emerald-200',
     warning: 'bg-amber-500/[0.06] border-amber-500/30 text-amber-200',
-    danger: 'bg-red-500/[0.06] border-red-500/30 text-red-200',
-    info: 'bg-slate-800/40 border-slate-700 text-slate-400',
+    danger:  'bg-rose-500/[0.06] border-rose-500/30 text-rose-200',
+    info:    'bg-slate-800/40 border-slate-700 text-slate-400',
   };
-  const Icon = type === 'success' ? CheckCircle2 : type === 'danger' ? AlertTriangle : type === 'warning' ? TrendingDown : Info;
+  const Icon =
+    type === 'success' ? CheckCircle2
+    : type === 'danger' ? AlertTriangle
+    : type === 'warning' ? TrendingDown
+    : Info;
   return (
     <div className={`flex gap-3 p-3 rounded-md border text-sm leading-relaxed ${styles[type]}`}>
       <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -715,29 +728,177 @@ function InsightRow({ type, text }: { type: InsightType; text: string }) {
   );
 }
 
-function FunnelRow({ label, value, bold, mono }: { label: string; value: string; bold?: boolean; mono?: boolean }) {
-  return (
-    <div className="flex justify-between items-center text-sm">
-      <span className="text-slate-400">{label}</span>
-      <span className={`${bold ? 'text-white font-bold' : 'text-white'} ${mono ? 'font-mono ppc-tick' : ''}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Divider() {
-  return <div className="w-full bg-slate-800 h-px" />;
-}
-
-function GuideCard({ icon, iconBg, title, children }: { icon: React.ReactNode; iconBg: string; title: string; children: React.ReactNode }) {
+function GuideCard({
+  icon, iconBg, title, children,
+}: {
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="bg-slate-900/60 backdrop-blur p-6 rounded-md border border-slate-800">
-      <div className={`${iconBg} w-10 h-10 rounded-md flex items-center justify-center mb-4`}>
+      <div className={`${iconBg} border w-10 h-10 rounded-md flex items-center justify-center mb-4`}>
         {icon}
       </div>
       <h3 className="font-display text-xl text-white mb-2">{title}</h3>
       <p className="text-sm text-slate-400 leading-relaxed">{children}</p>
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   CURRENCY PICKER
+───────────────────────────────────────────── */
+
+function CurrencyPicker({
+  value, onChange, focusRing,
+}: {
+  value: CurrencyCode;
+  onChange: (c: CurrencyCode) => void;
+  focusRing: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const current = CURRENCIES.find((c) => c.code === value)!;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/50 backdrop-blur px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-colors ${focusRing}`}
+        aria-label="Change currency"
+      >
+        <span className="font-mono">{current.symbol}</span>
+        <span className="font-bold uppercase tracking-wider">{current.code}</span>
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-10 min-w-[120px] rounded-md border border-slate-700 bg-slate-900/95 backdrop-blur py-1 shadow-2xl">
+          {CURRENCIES.map((c) => (
+            <button
+              key={c.code}
+              onClick={() => { onChange(c.code); setOpen(false); }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-slate-800 ${c.code === value ? 'text-orange-400' : 'text-slate-300'}`}
+            >
+              <span className="w-8 font-mono">{c.symbol}</span>
+              <span className="font-bold uppercase tracking-wider">{c.code}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   AD FUNNEL (NEW)
+───────────────────────────────────────────── */
+
+function AdFunnelPanel({
+  clicks, orders, conversionRate, cpa, clicksToSale, fmt, fmtN,
+}: {
+  clicks: number;
+  orders: number;
+  conversionRate: number;
+  cpa: number;
+  clicksToSale: number;
+  fmt: (n: number) => string;
+  fmtN: (n: number) => string;
+}) {
+  // If clicks is 0, show empty state
+  const hasData = clicks > 0;
+  const ordersPct = clicks > 0 ? (orders / clicks) * 100 : 0;
+  // For visual scaling — orders bar needs minimum visible width
+  const ordersVisualPct = Math.max(ordersPct, hasData ? 0.5 : 0);
+
+  return (
+    <Panel
+      title="Ad Funnel"
+      icon={<Filter className="w-3.5 h-3.5 text-orange-400" />}
+      rightSlot={<span className="text-[10px] text-slate-500 font-mono">click → order</span>}
+    >
+      {hasData ? (
+        <>
+          {/* Clicks bar */}
+          <div className="flex items-center gap-3">
+            <div className="w-24 shrink-0">
+              <div className="text-xs font-bold text-slate-200">Clicks</div>
+              <div className="text-[10px] text-slate-500 leading-tight">paid traffic</div>
+            </div>
+            <div className="flex-1 relative h-7 bg-slate-950 rounded border border-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-orange-500 transition-all duration-500 flex items-center justify-end pr-2"
+                style={{ width: '100%' }}
+              >
+                <span className="text-[10px] font-mono font-bold text-white">100%</span>
+              </div>
+            </div>
+            <div className="w-24 shrink-0 text-right">
+              <div className="text-sm font-mono font-bold text-white ppc-tick">{fmtN(clicks)}</div>
+              <div className="text-[10px] text-slate-500 font-mono">total clicks</div>
+            </div>
+          </div>
+
+          {/* Orders bar */}
+          <div className="flex items-center gap-3">
+            <div className="w-24 shrink-0">
+              <div className="text-xs font-bold text-slate-200">Orders</div>
+              <div className="text-[10px] text-slate-500 leading-tight">converted sales</div>
+            </div>
+            <div className="flex-1 relative h-7 bg-slate-950 rounded border border-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-500 flex items-center justify-end pr-2"
+                style={{ width: `${ordersVisualPct}%` }}
+              >
+                {ordersVisualPct >= 10 && (
+                  <span className="text-[10px] font-mono font-bold text-white">
+                    {conversionRate.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {ordersVisualPct < 10 && (
+                <span
+                  className="absolute top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold text-emerald-300"
+                  style={{ left: `calc(${ordersVisualPct}% + 6px)` }}
+                >
+                  {conversionRate.toFixed(2)}%
+                </span>
+              )}
+            </div>
+            <div className="w-24 shrink-0 text-right">
+              <div className="text-sm font-mono font-bold text-white ppc-tick">{fmtN(orders)}</div>
+              <div className="text-[10px] text-slate-500 font-mono">orders</div>
+            </div>
+          </div>
+
+          {/* Summary chips */}
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="rounded-md bg-slate-950 border border-slate-800 p-2.5">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Clicks per sale</div>
+              <div className="font-mono font-bold text-white text-sm ppc-tick mt-0.5">{clicksToSale > 0 ? clicksToSale : '—'}</div>
+            </div>
+            <div className="rounded-md bg-slate-950 border border-slate-800 p-2.5">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cost per acquisition</div>
+              <div className="font-mono font-bold text-white text-sm ppc-tick mt-0.5">{fmt(cpa)}</div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            You spend <span className="font-mono text-slate-300">{fmt(cpa)}</span> in ads to acquire each order. Of every <b className="text-orange-300 font-mono">{clicksToSale > 0 ? clicksToSale : '—'}</b> clicks, <b className="text-emerald-300 font-mono">1</b> converts.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500 italic py-4 text-center">
+          Enter ad spend, sales, and CPC to see the funnel.
+        </p>
+      )}
+    </Panel>
   );
 }
