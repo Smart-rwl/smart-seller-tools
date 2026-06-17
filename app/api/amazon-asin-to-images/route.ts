@@ -9,10 +9,10 @@ export const maxDuration = 60;
    CONFIG
 ───────────────────────────────────────────── */
 const MAX_ASINS_PER_REQUEST = 25;
-const FETCH_CONCURRENCY     = 3;
 const IMAGE_CONCURRENCY     = 8;
 const PDP_TIMEOUT_MS        = 15_000;
 const IMG_TIMEOUT_MS        = 20_000;
+const MAX_PDP_RETRIES       = 3;          // was implicit 2
 const ASIN_REGEX            = /^[A-Z0-9]{10}$/;
 
 const ALLOWED_TLDS = new Set([
@@ -21,6 +21,12 @@ const ALLOWED_TLDS = new Set([
   'in', 'co.jp', 'sg', 'com.au',
   'ae', 'sa', 'eg', 'com.tr',
 ]);
+
+/** Markets with aggressive bot detection — single-thread + delay. */
+const SENSITIVE_MARKETS = new Set(['in', 'ae', 'sa', 'eg', 'com.tr']);
+
+const FETCH_CONCURRENCY = (tld: string) => SENSITIVE_MARKETS.has(tld) ? 1 : 3;
+const INTER_REQUEST_DELAY_MS = (tld: string) => SENSITIVE_MARKETS.has(tld) ? 450 : 0;
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
@@ -60,11 +66,6 @@ interface AsinResult {
    HELPERS
 ───────────────────────────────────────────── */
 
-/**
- * Strip ALL Amazon size/crop modifiers from a CDN URL to get the original.
- * Captures everything between the image ID and the file extension and removes it.
- * Handles arbitrary modifier complexity: ._SL1500_, ._AC_SX466_SR300,300_, etc.
- */
 function toHiRes(url: string): string {
   return url.replace(
     /(\/images\/I\/[A-Za-z0-9+\-_%]+)\.[^/]*?\.(jpg|jpeg|png|webp)(\?|$)/i,
@@ -72,13 +73,76 @@ function toHiRes(url: string): string {
   );
 }
 
-/** Extract the Amazon image ID from a CDN URL (used for deduping). */
 function idFromUrl(url: string): string | null {
   const m = url.match(/\/images\/I\/([A-Za-z0-9+\-_%]+?)(?:[._]|\?|$)/);
   return m ? m[1] : null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Build a clean Accept-Language header without duplicate-language entries.
+ * Fixes the edge case where locale primary equals locale ('ja' === 'ja-JP'.split('-')[0]).
+ */
+function buildAcceptLanguage(locale?: string): string {
+  if (!locale) return 'en-US,en;q=0.9';
+  const primary = locale.split('-')[0];
+  if (locale === primary) return `${primary},en;q=0.8`;
+  if (primary === 'en') return `${locale},en;q=0.9`;
+  return `${locale},${primary};q=0.9,en;q=0.8`;
+}
+
+/**
+ * Comprehensive Amazon block-page detection. Returns the specific reason
+ * so users can distinguish CAPTCHA from "Sorry" from generic blocks.
+ */
+function detectBlockPage(html: string): string | null {
+  // 1. CAPTCHA endpoint reference
+  if (html.includes('/errors/validateCaptcha')) {
+    return 'Amazon CAPTCHA challenge';
+  }
+  // 2. "Type the characters" — classic robot check copy
+  if (/type the characters you see/i.test(html)) {
+    return 'Amazon robot check (CAPTCHA)';
+  }
+  // 3. Generic anti-bot interstitial
+  if (/we\s+just\s+need\s+to\s+make\s+sure\s+you'?re?\s+not\s+a\s+robot/i.test(html)) {
+    return 'Amazon anti-bot interstitial';
+  }
+  // 4. <title>Robot Check</title>
+  if (/<title>\s*Robot Check\s*<\/title>/i.test(html)) {
+    return 'Amazon Robot Check page';
+  }
+  // 5. "Sorry!" pages
+  if (/<title>\s*Sorry!?\s*[\s\S]{0,80}(went wrong|servers)/i.test(html)) {
+    return 'Amazon Sorry page';
+  }
+  // 6. Existing heuristic — small support page
+  if (html.length < 30_000 && /api-services-support@amazon\.com/i.test(html)) {
+    return 'Amazon support error page (likely blocked)';
+  }
+  // 7. Page is suspiciously small AND doesn't contain expected PDP markers
+  if (html.length < 20_000 && !/(landingImage|imageGalleryData|colorImages|"hiRes")/.test(html)) {
+    return `Suspiciously small response (${html.length}B) with no PDP markers`;
+  }
+  return null;
+}
+
+/**
+ * Wrap a URL through a configured proxy (ScrapingBee-style) if env var is set.
+ * Different providers have different URL schemes — this assumes a query-param wrapper.
+ * Examples that work:
+ *   ScrapingBee: https://app.scrapingbee.com/api/v1/?api_key=KEY&url={URL_ENCODED}
+ *   ScraperAPI: http://api.scraperapi.com?api_key=KEY&url={URL_ENCODED}
+ *
+ * Set AMAZON_SCRAPER_PROXY to the prefix up to and including `url=`:
+ *   AMAZON_SCRAPER_PROXY="https://app.scrapingbee.com/api/v1/?api_key=YOUR_KEY&render_js=false&url="
+ */
+function proxiedUrl(target: string): string {
+  const prefix = process.env.AMAZON_SCRAPER_PROXY;
+  if (!prefix) return target;
+  return `${prefix}${encodeURIComponent(target)}`;
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const ctrl = new AbortController();
@@ -104,14 +168,9 @@ async function pool<T, R>(items: T[], limit: number, mapper: (item: T, i: number
 }
 
 /* ─────────────────────────────────────────────
-   PDP IMAGE EXTRACTION
+   PDP IMAGE EXTRACTION  (unchanged — this part works well)
 ───────────────────────────────────────────── */
 
-/**
- * Walk forward from an opening `[` and find its matching `]`, ignoring
- * brackets inside string literals. Required because gallery entries contain
- * nested arrays like `"main":{"...":[1500,1500]}` that broke non-greedy regex.
- */
 function bracketMatchArray(text: string, openBracketIdx: number): string | null {
   if (text[openBracketIdx] !== '[') return null;
   let depth = 0;
@@ -136,12 +195,6 @@ function bracketMatchArray(text: string, openBracketIdx: number): string | null 
   return null;
 }
 
-/**
- * Locate the `colorImages.initial` array text — the gallery for the
- * currently-selected product variation only. Scoping to `initial` excludes
- * sibling keys like `colorImages.BLACK`, which would otherwise leak in as
- * swatch/variation images.
- */
 function findColorImagesInitial(html: string): string | null {
   const colorMatch = html.match(/['"]colorImages['"]\s*:/);
   if (!colorMatch || colorMatch.index === undefined) return null;
@@ -153,7 +206,6 @@ function findColorImagesInitial(html: string): string | null {
   return bracketMatchArray(html, bracketIdx);
 }
 
-/** Locate `imageGalleryData` array (alternative PDP layout). */
 function findImageGalleryData(html: string): string | null {
   const m = html.match(/['"]imageGalleryData['"]\s*:\s*\[/);
   if (!m || m.index === undefined) return null;
@@ -161,10 +213,6 @@ function findImageGalleryData(html: string): string | null {
   return bracketMatchArray(html, bracketIdx);
 }
 
-/**
- * Split a JSON array string `[{...},{...}]` into its top-level object entries,
- * using string-aware brace counting so braces inside string values don't break splits.
- */
 function splitArrayEntries(arrayText: string): string[] {
   const entries: string[] = [];
   let depth = 0;
@@ -196,13 +244,6 @@ function splitArrayEntries(arrayText: string): string[] {
   return entries;
 }
 
-/**
- * From a gallery array string, return ONE URL per entry — preferring the
- * first available field in `preferredFields`. This guarantees we never pull
- * both the hiRes (e.g. 2000x2000) and the large (e.g. 500x500) versions of
- * the same gallery slot, which can happen when Amazon assigns them different
- * image IDs (in which case ID-based dedup would not catch them).
- */
 function pickOneUrlPerEntry(arrayText: string, preferredFields: string[]): string[] {
   const urls: string[] = [];
   for (const entry of splitArrayEntries(arrayText)) {
@@ -215,17 +256,6 @@ function pickOneUrlPerEntry(arrayText: string, preferredFields: string[]): strin
   return urls;
 }
 
-/**
- * Extract product images from PDP HTML.
- *
- * Strategy order:
- *   1. colorImages.initial array — current variation's gallery ONLY
- *      (excludes sibling color variations that appear as swatches)
- *   2. imageGalleryData array — alt layout, also variation-scoped
- *   3. landingImage data-old-hires — single main image fallback
- *   4. data-a-dynamic-image — JSON of sizes, pick largest
- *   5. altImages thumbnails — supplemental, already DOM-scoped per variation
- */
 function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: boolean): ExtractedImage[] {
   const found: ExtractedImage[] = [];
   const seenIds = new Set<string>();
@@ -249,33 +279,23 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     found.push({ url: cleaned, variant, ext });
   };
 
-  // Strategy 1: colorImages.initial — ONE URL per gallery entry (hiRes preferred).
-  // Prevents pulling both 500x500 and 2000x2000 of the same slot when their
-  // image IDs differ (in which case ID dedup alone wouldn't catch them).
   const initialArr = findColorImagesInitial(html);
   if (initialArr) {
-    for (const url of pickOneUrlPerEntry(initialArr, ['hiRes', 'large'])) {
-      pushUrl(url);
-    }
+    for (const url of pickOneUrlPerEntry(initialArr, ['hiRes', 'large'])) pushUrl(url);
   }
 
-  // Strategy 2: imageGalleryData — ONE URL per entry
   if (found.length === 0) {
     const galleryArr = findImageGalleryData(html);
     if (galleryArr) {
-      for (const url of pickOneUrlPerEntry(galleryArr, ['mainUrl', 'hiRes', 'large'])) {
-        pushUrl(url);
-      }
+      for (const url of pickOneUrlPerEntry(galleryArr, ['mainUrl', 'hiRes', 'large'])) pushUrl(url);
     }
   }
 
-  // Strategy 3: landingImage data-old-hires fallback
   if (found.length === 0) {
     const main = html.match(/id=["']landingImage["'][^>]*data-old-hires=["']([^"']+)["']/i);
     if (main) pushUrl(main[1]);
   }
 
-  // Strategy 4: data-a-dynamic-image — pick largest
   if (found.length === 0) {
     const dyn = html.match(/id=["']landingImage["'][^>]*data-a-dynamic-image=["']([^"']+)["']/i);
     if (dyn) {
@@ -292,7 +312,6 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     }
   }
 
-  // Strategy 5: altImages thumbnails (DOM-scoped per variation)
   if (found.length < 2 && includeVariants) {
     const altSection = html.match(/id=["']altImages["'][\s\S]*?<\/ul>/i);
     if (altSection) {
@@ -303,14 +322,14 @@ function extractImagesFromHtml(html: string, hiRes: boolean, includeVariants: bo
     }
   }
 
-  if (!includeVariants && found.length > 0) {
-    return [found[0]];
-  }
-
+  if (!includeVariants && found.length > 0) return [found[0]];
   return found;
 }
 
-/** Fetch a single PDP and extract images. Retries once on 503/429. */
+/* ─────────────────────────────────────────────
+   FETCH PDP
+───────────────────────────────────────────── */
+
 async function fetchPdpImages(
   asin: string,
   tld: string,
@@ -318,12 +337,15 @@ async function fetchPdpImages(
   hiRes: boolean,
   includeVariants: boolean,
 ): Promise<ExtractedImage[]> {
-  const url = `https://www.amazon.${tld}/dp/${asin}?th=1&psc=1`;
+  // Inter-request delay for sensitive markets (sequential pool means this staggers naturally)
+  const delay = INTER_REQUEST_DELAY_MS(tld);
+  if (delay > 0) await sleep(delay + Math.random() * 200);
 
+  const url = `https://www.amazon.${tld}/dp/${asin}?th=1&psc=1`;
   const headers: Record<string, string> = {
     'User-Agent': randomUA(),
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': locale ? `${locale},${locale.split('-')[0]};q=0.9,en;q=0.8` : 'en-US,en;q=0.9',
+    'Accept-Language': buildAcceptLanguage(locale),
     'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
@@ -336,27 +358,50 @@ async function fetchPdpImages(
 
   let attempt = 0;
   let lastErr: Error | null = null;
-  while (attempt < 2) {
+
+  while (attempt < MAX_PDP_RETRIES) {
     try {
-      const res = await fetchWithTimeout(url, { headers, redirect: 'follow' }, PDP_TIMEOUT_MS);
+      const res = await fetchWithTimeout(
+        proxiedUrl(url),
+        { headers, redirect: 'follow' },
+        PDP_TIMEOUT_MS,
+      );
+
       if (res.status === 404) throw new Error('ASIN not found (404)');
       if (res.status === 503 || res.status === 429) {
         attempt++;
-        await sleep(800 + Math.random() * 1200);
+        // Longer exponential-ish backoff: 1s, 2s, 3.5s
+        await sleep((1000 * attempt) + Math.random() * 800);
         continue;
       }
+      if (res.status === 403) throw new Error('Amazon blocked the request (403 Forbidden)');
       if (!res.ok) throw new Error(`PDP HTTP ${res.status}`);
+
       const html = await res.text();
-      if (html.toLowerCase().includes('api-services-support@amazon.com') && html.length < 30_000) {
-        throw new Error('Blocked by Amazon CAPTCHA / robot check');
+
+      // Comprehensive block-page detection
+      const blockReason = detectBlockPage(html);
+      if (blockReason) {
+        // Retry on block — Amazon sometimes serves a CAPTCHA once then real content
+        if (attempt < MAX_PDP_RETRIES - 1) {
+          attempt++;
+          await sleep((1500 * attempt) + Math.random() * 1000);
+          continue;
+        }
+        throw new Error(blockReason);
       }
+
       const images = extractImagesFromHtml(html, hiRes, includeVariants);
-      if (images.length === 0) throw new Error('No images found in PDP');
+      if (images.length === 0) {
+        throw new Error(`No images found in PDP (${html.length}B response)`);
+      }
       return images;
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
+      // Don't retry on 404 — it won't recover
+      if (lastErr.message.includes('404')) break;
       attempt++;
-      if (attempt < 2) await sleep(500 + Math.random() * 800);
+      if (attempt < MAX_PDP_RETRIES) await sleep(600 + Math.random() * 900);
     }
   }
   throw lastErr || new Error('PDP fetch failed');
@@ -365,15 +410,20 @@ async function fetchPdpImages(
 /* ─────────────────────────────────────────────
    IMAGE DOWNLOAD
 ───────────────────────────────────────────── */
+
 async function downloadImage(url: string): Promise<Buffer | null> {
   try {
-    const res = await fetchWithTimeout(url, {
-      headers: {
-        'User-Agent': randomUA(),
-        'Accept': 'image/avif,image/webp,image/jpeg,image/png,*/*',
-        'Referer': 'https://www.amazon.com/',
+    const res = await fetchWithTimeout(
+      proxiedUrl(url),
+      {
+        headers: {
+          'User-Agent': randomUA(),
+          'Accept': 'image/avif,image/webp,image/jpeg,image/png,*/*',
+          'Referer': 'https://www.amazon.com/',
+        },
       },
-    }, IMG_TIMEOUT_MS);
+      IMG_TIMEOUT_MS,
+    );
     if (!res.ok) return null;
     const ab = await res.arrayBuffer();
     if (ab.byteLength === 0) return null;
@@ -384,8 +434,51 @@ async function downloadImage(url: string): Promise<Buffer | null> {
 }
 
 /* ─────────────────────────────────────────────
+   DIAGNOSTIC HINT
+───────────────────────────────────────────── */
+
+function diagnosticHint(failures: { asin: string; reason: string }[], marketplace: string): string {
+  if (failures.length === 0) return '';
+  const reasons = failures.map((f) => f.reason.toLowerCase());
+
+  const blockedCount = reasons.filter((r) =>
+    r.includes('captcha') || r.includes('robot') || r.includes('blocked') ||
+    r.includes('anti-bot') || r.includes('sorry page') || r.includes('support error') ||
+    r.includes('suspiciously small')
+  ).length;
+
+  const rateLimitCount = reasons.filter((r) => r.includes('503') || r.includes('429')).length;
+  const notFoundCount  = reasons.filter((r) => r.includes('404')).length;
+  const noImagesCount  = reasons.filter((r) => r.includes('no images found')).length;
+  const total = failures.length;
+
+  if (blockedCount === total) {
+    const hasProxy = !!process.env.AMAZON_SCRAPER_PROXY;
+    if (hasProxy) {
+      return `Amazon.${marketplace} blocked all ${total} requests even through the configured proxy. The proxy may need a different setting (try render_js=true for ScrapingBee), a different residential pool, or the proxy quota is exhausted.`;
+    }
+    return `Amazon.${marketplace} is blocking the server's IP — all ${total} requests hit anti-bot pages. This is expected on Vercel/serverless for amazon.in and Middle East markets. Fix: set the AMAZON_SCRAPER_PROXY env var to a residential proxy (ScrapingBee, ScraperAPI, Bright Data) using the format documented in proxiedUrl() in route.ts.`;
+  }
+
+  if (rateLimitCount > total * 0.5) {
+    return `Amazon rate-limited ${rateLimitCount}/${total} requests (503/429). Wait 5-10 minutes and retry with a smaller batch (≤3 ASINs), or set AMAZON_SCRAPER_PROXY.`;
+  }
+
+  if (notFoundCount === total) {
+    return `All ${total} ASINs returned 404 — verify the ASINs exist in amazon.${marketplace}. Some ASINs are marketplace-specific.`;
+  }
+
+  if (noImagesCount > total * 0.5) {
+    return `PDP loaded but image extraction failed for ${noImagesCount}/${total} ASINs. Amazon may have changed their HTML structure for this category. Check the response size in the error message — if it's normal (>100KB), the extraction logic needs an update.`;
+  }
+
+  return `Mixed failures across ${total} ASINs. See per-ASIN details. Common causes: rate limiting (try smaller batches), invalid ASINs (verify in amazon.${marketplace}), or partial bot detection.`;
+}
+
+/* ─────────────────────────────────────────────
    ROUTE HANDLER
 ───────────────────────────────────────────── */
+
 export async function POST(req: Request) {
   let body: RequestBody;
   try {
@@ -419,7 +512,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid ASINs in request' }, { status: 400 });
   }
 
-  const results: AsinResult[] = await pool(cleanAsins, FETCH_CONCURRENCY, async (asin) => {
+  const concurrency = FETCH_CONCURRENCY(marketplace);
+
+  const results: AsinResult[] = await pool(cleanAsins, concurrency, async (asin) => {
     try {
       let images = await fetchPdpImages(asin, marketplace, locale, hiRes, includeVariants);
       if (images.length > maxPerAsin) images = images.slice(0, maxPerAsin);
@@ -433,13 +528,48 @@ export async function POST(req: Request) {
   const tasks: Task[] = [];
   for (const r of results) for (const img of r.images) tasks.push({ asin: r.asin, img });
 
+  /* ────── ALL FAILED — return rich diagnostic ────── */
   if (tasks.length === 0) {
-    return NextResponse.json(
-      { error: 'Could not extract images for any ASIN. They may be invalid, restricted, or blocked by Amazon.' },
-      { status: 422 },
+    const failedAsins = results.map((r) => ({
+      asin: r.asin,
+      reason: r.error || 'Unknown failure',
+    }));
+
+    // Group identical reasons for compact summary line
+    const reasonCounts = new Map<string, number>();
+    for (const f of failedAsins) {
+      reasonCounts.set(f.reason, (reasonCounts.get(f.reason) || 0) + 1);
+    }
+    const summary = Array.from(reasonCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([reason, count]) => `${count}× ${reason}`)
+      .join(' · ');
+
+    const hint = diagnosticHint(failedAsins, marketplace);
+
+    return new NextResponse(
+      JSON.stringify({
+        error: `All ${cleanAsins.length} ASINs failed on amazon.${marketplace}. ${summary}`,
+        marketplace: `amazon.${marketplace}`,
+        concurrency,
+        proxyConfigured: !!process.env.AMAZON_SCRAPER_PROXY,
+        diagnostic: hint,
+        details: failedAsins,
+      }, null, 2),
+      {
+        status: 422,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Image-Count':  '0',
+          'X-Error-Count':  String(failedAsins.length),
+          'X-Asin-Count':   String(cleanAsins.length),
+          'Cache-Control':  'no-store',
+        },
+      },
     );
   }
 
+  /* ────── PARTIAL OR FULL SUCCESS — build ZIP ────── */
   const zip = new JSZip();
   let okCount = 0;
   let failCount = 0;
@@ -451,7 +581,7 @@ export async function POST(req: Request) {
     const filename = `${asin}.${img.variant}.${img.ext === 'jpeg' ? 'jpg' : img.ext}`;
     if (!buf) {
       failCount++;
-      failures.push({ asin, url: img.url, reason: 'download failed' });
+      failures.push({ asin, url: img.url, reason: 'image download failed' });
       return;
     }
     zip.folder(asin)!.file(filename, buf);
@@ -460,6 +590,7 @@ export async function POST(req: Request) {
     manifest[asin].push({ variant: img.variant, filename, url: img.url });
   });
 
+  // PDP-level failures join image-download failures in the report
   for (const r of results) {
     if (r.error) failures.push({ asin: r.asin, url: '', reason: r.error });
   }
@@ -477,6 +608,8 @@ export async function POST(req: Request) {
       'Amazon ASIN to Images — Error Report',
       `Generated: ${new Date().toISOString()}`,
       `Marketplace: amazon.${marketplace}`,
+      `Concurrency used: ${concurrency}`,
+      `Proxy configured: ${!!process.env.AMAZON_SCRAPER_PROXY}`,
       '',
       ...failures.map((f) => `[${f.asin}] ${f.reason}${f.url ? '  ' + f.url : ''}`),
     ].join('\n');
@@ -494,10 +627,10 @@ export async function POST(req: Request) {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="amazon-${marketplace}-images.zip"`,
-      'X-Image-Count': String(okCount),
-      'X-Error-Count': String(failures.length),
-      'X-Asin-Count': String(cleanAsins.length),
-      'Cache-Control': 'no-store',
+      'X-Image-Count':  String(okCount),
+      'X-Error-Count':  String(failures.length),
+      'X-Asin-Count':   String(cleanAsins.length),
+      'Cache-Control':  'no-store',
     },
   });
 }

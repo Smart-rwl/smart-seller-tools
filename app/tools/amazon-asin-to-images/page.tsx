@@ -9,17 +9,18 @@ import {
   CheckCircle2,
   FileImage,
   Zap,
-  Package,
   Archive,
   X,
   ChevronRight,
-  Image as ImageIcon,
   Layers,
   Clock,
   Shield,
   Globe,
   Settings2,
   Hash,
+  AlertCircle,
+  Activity,
+  XCircle,
 } from 'lucide-react';
 import ToolWorkspace from '@/app/components/ToolWorkspace';
 
@@ -40,6 +41,27 @@ interface ParsedAsins {
   total: number;
   valid: string[];
   invalid: string[];
+  duplicates: number;
+}
+
+interface DownloadResult {
+  imageCount: number;
+  errorCount: number;
+  asinCount: number;
+  elapsedMs: number;
+  filename: string;
+  timestamp: number;
+}
+
+type FailureDetail = { asin: string; reason: string };
+
+interface StructuredError {
+  message: string;
+  diagnostic?: string;
+  details?: FailureDetail[];
+  marketplace?: string;
+  proxyConfigured?: boolean;
+  status?: number;
 }
 
 /* ─────────────────────────────────────────────
@@ -74,7 +96,14 @@ const MARKETPLACES: Marketplace[] = [
 
 const REGIONS: Region[] = ['Americas', 'Europe', 'Asia-Pac', 'MENA'];
 const ASIN_REGEX = /^[A-Z0-9]{10}$/i;
-const STORAGE_KEY = 'amazon-asin-tool:marketplace';
+const STORAGE_KEY = 'amazon-asin-tool:state:v2';
+
+const safeMaxPerAsin = (raw: string): number | undefined => {
+  if (!raw.trim()) return undefined;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return Math.min(n, 20);
+};
 
 /* ─────────────────────────────────────────────
    MAIN COMPONENT
@@ -90,6 +119,7 @@ export default function AmazonAsinToImages() {
   const [includeVariants, setIncludeVariants] = useState(true);
   const [hiRes, setHiRes] = useState(true);
   const [maxPerAsin, setMaxPerAsin] = useState<string>('');
+  const [hydrated, setHydrated] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -97,38 +127,61 @@ export default function AmazonAsinToImages() {
   const [dragOver, setDragOver] = useState(false);
   const [done, setDone] = useState(false);
 
-  /* ── Persist marketplace choice ── */
+  // Diagnostic state
+  const [result, setResult] = useState<DownloadResult | null>(null);
+  const [errorBanner, setErrorBanner] = useState<StructuredError | null>(null);
+  const [showAllInvalid, setShowAllInvalid] = useState(false);
+
+  /* ── Persist & hydrate ── */
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const found = MARKETPLACES.find((m) => m.tld === saved);
-        if (found) {
-          setMarketplace(found);
-          setActiveRegion(found.region);
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.marketplaceTld) {
+          const found = MARKETPLACES.find((m) => m.tld === s.marketplaceTld);
+          if (found) {
+            setMarketplace(found);
+            setActiveRegion(found.region);
+          }
         }
+        if (typeof s.includeVariants === 'boolean') setIncludeVariants(s.includeVariants);
+        if (typeof s.hiRes === 'boolean') setHiRes(s.hiRes);
+        if (typeof s.maxPerAsin === 'string') setMaxPerAsin(s.maxPerAsin);
       }
     } catch { /* ignore */ }
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, marketplace.tld); } catch { /* ignore */ }
-  }, [marketplace]);
+    if (!hydrated || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        marketplaceTld: marketplace.tld,
+        includeVariants,
+        hiRes,
+        maxPerAsin,
+      }));
+    } catch { /* ignore */ }
+  }, [hydrated, marketplace, includeVariants, hiRes, maxPerAsin]);
 
   /* ── FILE UPLOAD ── */
   const handleFile = async (file: File) => {
     const name = file.name.toLowerCase();
     if (!/\.(csv|tsv|txt)$/.test(name)) {
-      alert('Please upload a .csv, .tsv, or .txt file');
+      setErrorBanner({ message: 'Please upload a .csv, .tsv, or .txt file' });
       return;
     }
     const text = await file.text();
     if (!text.trim()) {
-      alert('File is empty');
+      setErrorBanner({ message: 'File is empty' });
       return;
     }
     setRawAsins(text);
     setDone(false);
+    setResult(null);
+    setErrorBanner(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -144,7 +197,7 @@ export default function AmazonAsinToImages() {
 
   /* ── PARSE ASINS ── */
   const parsed = useMemo<ParsedAsins>(() => {
-    if (!rawAsins?.trim()) return { total: 0, valid: [], invalid: [] };
+    if (!rawAsins?.trim()) return { total: 0, valid: [], invalid: [], duplicates: 0 };
     const tokens = rawAsins
       .replace(/["']/g, '')
       .split(/[\s,;|]+/)
@@ -154,23 +207,52 @@ export default function AmazonAsinToImages() {
     const seen = new Set<string>();
     const valid: string[] = [];
     const invalid: string[] = [];
+    let duplicates = 0;
 
     for (const t of tokens) {
-      if (seen.has(t)) continue;
+      if (seen.has(t)) { duplicates++; continue; }
       seen.add(t);
       if (ASIN_REGEX.test(t)) valid.push(t);
       else invalid.push(t);
     }
-    return { total: tokens.length, valid, invalid };
+    return { total: tokens.length, valid, invalid, duplicates };
   }, [rawAsins]);
 
   const isBlocked = loading || parsed.valid.length === 0;
 
   /* ── DOWNLOAD ── */
   const handleDownload = async () => {
+    const t0 = performance.now();
+    const requestPayload = {
+      asins: parsed.valid,
+      marketplace: marketplace.tld,
+      locale: marketplace.locale,
+      options: {
+        includeVariants,
+        hiRes,
+        maxPerAsin: safeMaxPerAsin(maxPerAsin),
+      },
+    };
+
+    // Diagnostic: log what we're sending
+    // eslint-disable-next-line no-console
+    console.group('[AmazonAsinToImages] Sending request');
+    // eslint-disable-next-line no-console
+    console.log('ASIN count:', parsed.valid.length);
+    // eslint-disable-next-line no-console
+    console.log('ASINs:', parsed.valid);
+    // eslint-disable-next-line no-console
+    console.log('Marketplace:', marketplace.tld);
+    // eslint-disable-next-line no-console
+    console.log('Options:', requestPayload.options);
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+
     try {
       setLoading(true);
       setDone(false);
+      setResult(null);
+      setErrorBanner(null);
       setProgress(10);
       setProgressLabel('Resolving ASINs…');
       controllerRef.current = new AbortController();
@@ -181,16 +263,7 @@ export default function AmazonAsinToImages() {
           'Content-Type': 'application/json',
           Accept: 'application/zip, application/json',
         },
-        body: JSON.stringify({
-          asins: parsed.valid,
-          marketplace: marketplace.tld,
-          locale: marketplace.locale,
-          options: {
-            includeVariants,
-            hiRes,
-            maxPerAsin: maxPerAsin ? parseInt(maxPerAsin, 10) : undefined,
-          },
-        }),
+        body: JSON.stringify(requestPayload),
         signal: controllerRef.current.signal,
       });
 
@@ -198,14 +271,60 @@ export default function AmazonAsinToImages() {
       setProgressLabel('Fetching product images…');
 
       const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      const imageCountHeader = res.headers.get('X-Image-Count');
+      const errorCountHeader = res.headers.get('X-Error-Count');
+      const asinCountHeader  = res.headers.get('X-Asin-Count');
 
+      // Diagnostic: log response headers
+      // eslint-disable-next-line no-console
+      console.group('[AmazonAsinToImages] Response received');
+      // eslint-disable-next-line no-console
+      console.log('Status:', res.status);
+      // eslint-disable-next-line no-console
+      console.log('Content-Type:', contentType);
+      // eslint-disable-next-line no-console
+      console.log('X-Image-Count:', imageCountHeader);
+      // eslint-disable-next-line no-console
+      console.log('X-Error-Count:', errorCountHeader);
+      // eslint-disable-next-line no-console
+      console.log('X-Asin-Count:', asinCountHeader);
+      // eslint-disable-next-line no-console
+      console.log('Elapsed (ms):', Math.round(performance.now() - t0));
+      // eslint-disable-next-line no-console
+      console.groupEnd();
+
+      // ── STRUCTURED ERROR HANDLING ──
       if (!res.ok || contentType.includes('application/json')) {
-        let message = `Server error (${res.status})`;
+        const structured: StructuredError = {
+          message: `Server error (${res.status})`,
+          status: res.status,
+        };
         try {
           const j = await res.json();
-          if (j?.error) message = j.error;
-        } catch { /* not JSON */ }
-        throw new Error(message);
+          // eslint-disable-next-line no-console
+          console.error('[AmazonAsinToImages] Server error payload:', j);
+          if (j?.error) structured.message = j.error;
+          if (j?.diagnostic) structured.diagnostic = j.diagnostic;
+          if (Array.isArray(j?.details)) structured.details = j.details;
+          if (j?.marketplace) structured.marketplace = j.marketplace;
+          if (typeof j?.proxyConfigured === 'boolean') structured.proxyConfigured = j.proxyConfigured;
+        } catch {
+          // Not JSON — keep default message
+        }
+        setErrorBanner(structured);
+
+        // Also surface result-panel context if the server included headers (route.ts does this on 422)
+        if (asinCountHeader) {
+          setResult({
+            imageCount: imageCountHeader ? parseInt(imageCountHeader, 10) : 0,
+            errorCount: errorCountHeader ? parseInt(errorCountHeader, 10) : 0,
+            asinCount:  parseInt(asinCountHeader, 10),
+            elapsedMs:  Math.round(performance.now() - t0),
+            filename:   '',
+            timestamp:  Date.now(),
+          });
+        }
+        return; // banner displays everything; skip throw/alert
       }
 
       if (!contentType.includes('application/zip')) {
@@ -218,30 +337,42 @@ export default function AmazonAsinToImages() {
       setProgress(85);
       setProgressLabel('Building ZIP…');
 
-      const imageCount = res.headers.get('X-Image-Count');
-      const errorCount = res.headers.get('X-Error-Count');
-
+      const filename = `amazon-${marketplace.tld}-images.zip`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `amazon-${marketplace.tld}-images.zip`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
 
       setProgress(100);
+
+      const imageCount = imageCountHeader ? parseInt(imageCountHeader, 10) : 0;
+      const errorCount = errorCountHeader ? parseInt(errorCountHeader, 10) : 0;
+      const elapsedMs = Math.round(performance.now() - t0);
+
       setProgressLabel(
-        errorCount && Number(errorCount) > 0
+        errorCount > 0
           ? `Done! ${imageCount} images (${errorCount} skipped)`
-          : 'Done!'
+          : 'Done!',
       );
       setDone(true);
+      setResult({
+        imageCount,
+        errorCount,
+        asinCount: parsed.valid.length,
+        elapsedMs,
+        filename,
+        timestamp: Date.now(),
+      });
     } catch (error: unknown) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       const msg = error instanceof Error ? error.message : 'Something went wrong while downloading';
-      console.error(error);
-      alert(msg);
+      // eslint-disable-next-line no-console
+      console.error('[AmazonAsinToImages] Error:', error);
+      setErrorBanner({ message: msg });
     } finally {
       setTimeout(() => {
         setLoading(false);
@@ -259,6 +390,13 @@ export default function AmazonAsinToImages() {
     () => MARKETPLACES.filter((m) => m.region === activeRegion),
     [activeRegion],
   );
+
+  /* ── Coverage analysis ── */
+  const coverage = result && result.asinCount > 0
+    ? (result.imageCount > 0 ? Math.min((result.imageCount / result.asinCount) * 100, 999) : 0)
+    : 0;
+  const expectedMin = result?.asinCount ?? 0;
+  const lowCoverage = result !== null && result.imageCount < expectedMin;
 
   /* ─────────────────────────────────────────
      LEFT PANEL
@@ -303,7 +441,6 @@ export default function AmazonAsinToImages() {
 
       {/* ── MARKETPLACE PICKER ── */}
       <div className="asin-card" style={{ animationDelay: '0.02s' }}>
-        {/* Header row: label + currently selected indicator */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Globe size={11} color="#475569" />
@@ -439,7 +576,7 @@ export default function AmazonAsinToImages() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {rawAsins && (
               <button
-                onClick={() => { setRawAsins(''); setDone(false); }}
+                onClick={() => { setRawAsins(''); setDone(false); setResult(null); setErrorBanner(null); }}
                 style={{ background: '#1e293b', border: 'none', borderRadius: 6, padding: '3px 5px', cursor: 'pointer', color: '#475569', display: 'flex', alignItems: 'center' }}
                 title="Clear"
                 aria-label="Clear ASINs"
@@ -455,7 +592,7 @@ export default function AmazonAsinToImages() {
         <textarea
           rows={6}
           value={rawAsins}
-          onChange={(e) => { setRawAsins(e.target.value); setDone(false); }}
+          onChange={(e) => { setRawAsins(e.target.value); setDone(false); setResult(null); }}
           placeholder={'B08N5WRWNW\nB09X7DKTLP, B0CR4N9KQM\nB07FZ8S74R B0CHX1W1XY'}
           style={{
             width: '100%',
@@ -478,7 +615,7 @@ export default function AmazonAsinToImages() {
         />
       </div>
 
-      {/* ── DROP ZONE (compact) ── */}
+      {/* ── DROP ZONE ── */}
       <div
         ref={dropRef}
         className="drop-zone-inner asin-card"
@@ -575,7 +712,7 @@ export default function AmazonAsinToImages() {
                 Max images per ASIN
               </span>
               <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.62rem', color: '#475569' }}>
-                Leave empty for all available
+                Leave empty for all (1–20)
               </span>
             </div>
             <input
@@ -627,7 +764,7 @@ export default function AmazonAsinToImages() {
         ))}
       </div>
 
-      {/* ── WARNING ── */}
+      {/* ── INVALID ASIN WARNING (expandable) ── */}
       {parsed.invalid.length > 0 && (
         <div className="asin-card" style={{
           display: 'flex', gap: 10, alignItems: 'flex-start',
@@ -635,14 +772,25 @@ export default function AmazonAsinToImages() {
           borderRadius: 12, padding: '12px 14px', animationDelay: '0.22s',
         }}>
           <AlertTriangle size={14} color="#fbbf24" style={{ marginTop: 1, flexShrink: 0 }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
             <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.78rem', color: '#fbbf24', lineHeight: 1.5 }}>
               {parsed.invalid.length} entr{parsed.invalid.length > 1 ? 'ies are' : 'y is'} not a valid 10-character ASIN and will be skipped.
             </span>
-            {parsed.invalid.length <= 5 && (
-              <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: '#a16207' }}>
+            {(parsed.invalid.length <= 5 || showAllInvalid) ? (
+              <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem', color: '#d97706', wordBreak: 'break-all' }}>
                 {parsed.invalid.join(', ')}
               </span>
+            ) : (
+              <button
+                onClick={() => setShowAllInvalid(true)}
+                style={{
+                  background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                  fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.68rem',
+                  color: '#d97706', textAlign: 'left', textDecoration: 'underline',
+                }}
+              >
+                {parsed.invalid.slice(0, 3).join(', ')} … and {parsed.invalid.length - 3} more (click to show all)
+              </button>
             )}
           </div>
         </div>
@@ -665,6 +813,102 @@ export default function AmazonAsinToImages() {
               transition: 'width 0.4s ease',
               boxShadow: '0 0 10px rgba(249,115,22,0.5)',
             }} />
+          </div>
+        </div>
+      )}
+
+      {/* ── ERROR BANNER (structured) ── */}
+      {errorBanner && (
+        <div className="asin-card" style={{
+          display: 'flex', flexDirection: 'column', gap: 10,
+          background: 'rgba(244,63,94,0.06)', border: '1px solid rgba(244,63,94,0.3)',
+          borderRadius: 12, padding: '14px 16px',
+        }}>
+          {/* Header + summary message */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <XCircle size={14} color="#f43f5e" style={{ marginTop: 2, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.82rem', color: '#fb7185', fontWeight: 700, lineHeight: 1.5 }}>
+                  Request failed{errorBanner.status ? ` (${errorBanner.status})` : ''}
+                </span>
+                <button
+                  onClick={() => setErrorBanner(null)}
+                  style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: '#fb7185', display: 'flex' }}
+                  aria-label="Dismiss"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <p style={{
+                fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.7rem',
+                color: '#fda4af', wordBreak: 'break-word', lineHeight: 1.6,
+                whiteSpace: 'pre-line',
+                margin: '4px 0 0 0',
+              }}>
+                {errorBanner.message}
+              </p>
+            </div>
+          </div>
+
+          {/* Diagnostic hint card (amber, actionable) */}
+          {errorBanner.diagnostic && (
+            <div style={{
+              background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.25)',
+              borderRadius: 8, padding: '10px 12px',
+              display: 'flex', gap: 8, alignItems: 'flex-start',
+            }}>
+              <AlertCircle size={12} color="#fbbf24" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', color: '#fbbf24', marginBottom: 4 }}>
+                  DIAGNOSTIC
+                </div>
+                <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.74rem', color: '#fde68a', lineHeight: 1.55, margin: 0 }}>
+                  {errorBanner.diagnostic}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Per-ASIN failure list */}
+          {errorBanner.details && errorBanner.details.length > 0 && (
+            <div>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', color: '#475569', marginBottom: 6 }}>
+                PER-ASIN FAILURES ({errorBanner.details.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                {errorBanner.details.map((d) => (
+                  <div key={d.asin} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                    background: '#0f172a', border: '1px solid #1e293b', borderRadius: 7,
+                    padding: '6px 10px',
+                  }}>
+                    <span style={{
+                      fontFamily: "'IBM Plex Mono',monospace", color: '#f97316',
+                      fontSize: '0.7rem', fontWeight: 500, flexShrink: 0,
+                    }}>
+                      {d.asin}
+                    </span>
+                    <span style={{
+                      fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.62rem',
+                      color: '#fb7185', textAlign: 'right',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                    }} title={d.reason}>
+                      {d.reason}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Footer hint */}
+          <div style={{
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.62rem', color: '#9f1239',
+            paddingTop: 6, borderTop: '1px dashed rgba(244,63,94,0.2)', lineHeight: 1.6,
+          }}>
+            DevTools → Console has the full request/response log.
+            {errorBanner.proxyConfigured === false && ' Set AMAZON_SCRAPER_PROXY env var if Amazon is blocking your server IP.'}
           </div>
         </div>
       )}
@@ -714,6 +958,73 @@ export default function AmazonAsinToImages() {
           </>
         )}
       </button>
+
+      {/* ── RESULTS PANEL ── */}
+      {result && !loading && (
+        <div className="asin-card" style={{
+          background: lowCoverage ? 'rgba(244,63,94,0.06)' : '#0a0f1a',
+          border: `1.5px solid ${lowCoverage ? 'rgba(244,63,94,0.3)' : '#1e293b'}`,
+          borderRadius: 14, padding: '14px 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Activity size={11} color={lowCoverage ? '#f43f5e' : '#475569'} />
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.1em', color: lowCoverage ? '#f43f5e' : '#475569' }}>
+                LAST DOWNLOAD
+              </span>
+            </div>
+            <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.62rem', color: '#475569' }}>
+              {(result.elapsedMs / 1000).toFixed(1)}s
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: lowCoverage ? 12 : 0 }}>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9, padding: '8px 10px' }}>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.1em', color: '#334155', marginBottom: 3 }}>
+                ASINS SENT
+              </div>
+              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.05rem', color: '#e2e8f0', fontWeight: 600 }}>
+                {result.asinCount}
+              </div>
+            </div>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9, padding: '8px 10px' }}>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.1em', color: '#334155', marginBottom: 3 }}>
+                IMAGES RECEIVED
+              </div>
+              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.05rem', color: lowCoverage ? '#f43f5e' : '#10b981', fontWeight: 600 }}>
+                {result.imageCount}
+              </div>
+            </div>
+            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 9, padding: '8px 10px' }}>
+              <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.1em', color: '#334155', marginBottom: 3 }}>
+                ERRORS
+              </div>
+              <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '1.05rem', color: result.errorCount > 0 ? '#fbbf24' : '#e2e8f0', fontWeight: 600 }}>
+                {result.errorCount}
+              </div>
+            </div>
+          </div>
+
+          {lowCoverage && (
+            <div style={{
+              display: 'flex', gap: 10, alignItems: 'flex-start',
+              background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)',
+              borderRadius: 10, padding: '10px 12px',
+            }}>
+              <AlertCircle size={14} color="#f43f5e" style={{ marginTop: 1, flexShrink: 0 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: '0.74rem', color: '#fb7185', fontWeight: 600, lineHeight: 1.5 }}>
+                  Server returned fewer images than expected
+                </span>
+                <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: '0.66rem', color: '#fda4af', lineHeight: 1.6 }}>
+                  Sent <b>{result.asinCount} ASIN{result.asinCount > 1 ? 's' : ''}</b>, server returned <b>{result.imageCount} image{result.imageCount === 1 ? '' : 's'}</b> ({coverage.toFixed(0)}% coverage).
+                  Each ASIN should yield at least 1 image (the MAIN). Check <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>error-report.txt</code> in the ZIP, or inspect the API route at <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 4px', borderRadius: 3 }}>/api/amazon-asin-to-images</code>.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -864,8 +1175,8 @@ export default function AmazonAsinToImages() {
           ],
         },
         {
-          icon: <Clock size={13} color="#a78bfa" />,
-          bg: '#a78bfa15', border: '#a78bfa20',
+          icon: <Clock size={13} color="#38bdf8" />,
+          bg: '#38bdf815', border: '#38bdf820',
           title: 'Limits & speed',
           items: [
             'Free: up to 25 ASINs per run',
