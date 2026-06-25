@@ -182,9 +182,7 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link href="/services" className={linkClass('/services')}>
-            Services
-          </Link>
+          
           <Link href="/blog" className={linkClass('/blog')}>
             Blog
           </Link>
@@ -287,12 +285,8 @@ export default function Navbar() {
                 label="All Tools"
                 active={pathname === '/tools'}
               />
-              <MobileNavLink
-                href="/services"
-                icon={<Package className="h-4 w-4" />}
-                label="Services"
-                active={pathname?.startsWith('/services') ?? false}
-              />
+              
+            
               <MobileNavLink
                 href="/blog"
                 icon={<BookOpen className="h-4 w-4" />}
