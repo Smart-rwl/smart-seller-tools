@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script"; 
+import Script from "next/script";
 import "./globals.css";
-import Navbar from "./components/Navbar"; 
-
+import Navbar from "./components/Navbar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,22 +24,30 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]`}>
-        
-        {/* Adsterra Ad Script */}
-        <Script 
-          src="//pl28175488.effectivegatecpm.com/66/6a/26/666a2635f82928121a8ccd607d68e862.js"
+      <body
+        className={`${inter.className} bg-gray-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]`}
+      >
+        {/* Google AdSense */}
+        <Script
+          id="google-adsense"
+          async
           strategy="afterInteractive"
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5164047988593269"
+          crossOrigin="anonymous"
         />
 
-        {/* Modern Glassmorphism Navbar */}
+        {/* Adsterra */}
+        <Script
+          id="adsterra"
+          strategy="afterInteractive"
+          src="//pl28175488.effectivegatecpm.com/66/6a/26/666a2635f82928121a8ccd607d68e862.js"
+        />
+
         <Navbar />
 
-        {/* Main Content with Padding for Fixed Header */}
         <main className="pt-20 min-h-screen">
           {children}
         </main>
-
       </body>
     </html>
   );
