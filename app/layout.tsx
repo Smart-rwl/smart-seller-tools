@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import Navbar from "./components/Navbar"; 
 
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -11,6 +12,9 @@ export const metadata: Metadata = {
   description: "Tools for Amazon and Flipkart Sellers",
   verification: {
     google: "mkSUi9CaHDpjMixEmkHhEbYgj2nL2eWBnSUq8B73E3M",
+  },
+  other: {
+    "google-adsense-account": "ca-pub-5164047988593269",
   },
 };
 

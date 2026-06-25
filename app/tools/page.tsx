@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { TOOLS, TOOL_GROUPS, type ToolCategory } from '../config/tools.config';
 
+
 /* ─────────────────────────────────────────────
    CONFIG
 ───────────────────────────────────────────── */
@@ -41,6 +42,7 @@ const QUERY_DEBOUNCE_MS = 200;
 
 type GroupKey = ToolCategory | 'all';
 
+
 /* Suspense wrapper because useSearchParams() requires it */
 export default function ToolsIndexPage() {
   return (
@@ -49,6 +51,8 @@ export default function ToolsIndexPage() {
     </Suspense>
   );
 }
+
+
 
 function ToolsIndexInner() {
   const router = useRouter();
@@ -559,4 +563,6 @@ function EmptyState({
       )}
     </div>
   );
+
+  
 }
